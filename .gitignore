@@ -1,0 +1,121 @@
+# ================== Dependencies ==================
+node_modules/
+frontend/node_modules/
+.venv/
+backend/.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ================== Environment & Secrets ==================
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env
+!.env.example
+
+# ================== Database ==================
+*.db
+*.sqlite
+*.sqlite3
+backend/dev.db
+backend/xiaoyunque.db
+
+# ================== Build & Dist ==================
+frontend/dist/
+
+# ================== Uploads (user content) ==================
+# backend/uploads/ (legacy path)
+backend/uploads/audio/*
+backend/uploads/characters/*
+backend/uploads/images/*
+backend/uploads/scenes/*
+backend/uploads/thumbnails/*
+backend/uploads/videos/*
+backend/uploads/generated/*
+!backend/uploads/.gitkeep
+!backend/uploads/audio/.gitkeep
+!backend/uploads/characters/.gitkeep
+!backend/uploads/images/.gitkeep
+!backend/uploads/scenes/.gitkeep
+!backend/uploads/thumbnails/.gitkeep
+!backend/uploads/videos/.gitkeep
+!backend/uploads/generated/.gitkeep
+
+# backend/app/uploads/ (actual runtime path)
+backend/app/uploads/audio/*
+backend/app/uploads/characters/*
+backend/app/uploads/images/*
+backend/app/uploads/scenes/*
+backend/app/uploads/thumbnails/*
+backend/app/uploads/videos/*
+backend/app/uploads/generated/*
+!backend/app/uploads/.gitkeep
+!backend/app/uploads/audio/.gitkeep
+!backend/app/uploads/characters/.gitkeep
+!backend/app/uploads/images/.gitkeep
+!backend/app/uploads/scenes/.gitkeep
+!backend/app/uploads/thumbnails/.gitkeep
+!backend/app/uploads/videos/.gitkeep
+!backend/app/uploads/generated/.gitkeep
+
+# ================== Large Style Images (push separately) ==================
+frontend/public/images/styles/
+
+# ================== IDE & Editor ==================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.trae/
+
+# ================== OS Files ==================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ================== Logs ==================
+*.log
+npm-debug.log*
+
+# ================== Deploy (contains secrets) ==================
+deploy/
+
+# ================== Backend Scripts (contains local credentials) ==================
+backend/scripts/
+
+# ================== Backups & Archives ==================
+*.zip
+*.sql
+*.bak
+*.tar.gz
+
+# ================== Reference / Internal Docs ==================
+参考/
+skill技能/
+数据库备份下载.txt
+《盛事魅力》分镜脚本（香港电影感）.txt
+
+# ================== Temporary Files ==================
+frontend/desk_b64.txt
+frontend/DirectorDesk.b64
+frontend/DirectorDesk_b64.txt
+frontend/fix-desk.js
+frontend/fix-encoding.js
+frontend/fix-types.cjs
+
+# ================== Cache ==================
+.cache/
+.eslintcache
+.vite/
+
+# ================== Test Coverage ==================
+coverage/
+.coverage
+htmlcov/
