@@ -124,5 +124,9 @@ npm run dev
 | `ADMIN_EMAIL` / `ADMIN_PASSWORD` | 管理员账号（首次启动自动创建） | `admin@xinghe.com` / `admin123456` |
 
 ## 📄 License
+有问题加QQ群讨论：
+<img width="1156" height="2055" alt="724b41085a20182c94d8391f80836075" src="https://github.com/user-attachments/assets/4ecfd61e-42c0-4b61-8842-89fba123c204" />
+
+
 
 MIT License
