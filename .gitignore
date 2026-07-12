@@ -64,9 +64,6 @@ backend/app/uploads/generated/*
 !backend/app/uploads/videos/.gitkeep
 !backend/app/uploads/generated/.gitkeep
 
-# ================== Large Style Images (push separately) ==================
-frontend/public/images/styles/
-
 # ================== IDE & Editor ==================
 .vscode/
 .idea/
