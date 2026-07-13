@@ -794,6 +794,20 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+# ── 启动时打印 LLM 模型配置 ──────────────────────────────
+logger.warning("=" * 60)
+logger.warning("LLM 模型配置 (启动时打印)")
+logger.warning("=" * 60)
+logger.warning("  LLM_MODEL_NAME (默认): %s", settings.LLM_MODEL_NAME)
+logger.warning("  LLM_PROVIDER (服务商): %s", settings.LLM_PROVIDER)
+logger.warning("  LLM_MODEL_LITE (轻量): %s", settings.LLM_MODEL_LITE)
+logger.warning("  LLM_MODEL_STANDARD (标准): %s", settings.LLM_MODEL_STANDARD)
+logger.warning("  LLM_MODEL_CREATIVE (旗舰): %s", settings.LLM_MODEL_CREATIVE)
+logger.warning("  DEPRECATED_MODELS (废弃): %s", settings.DEPRECATED_MODELS)
+logger.warning("  API91_BASE_URL: %s", settings.API91_BASE_URL)
+logger.warning("  ARK_BASE_URL: %s", settings.VOLCENGINE_ARK_API_BASE_URL)
+logger.warning("=" * 60)
+
 # ── API 速率限制 ──────────────────────────────────────────
 # 全局限流器：按客户端 IP 限流，默认每分钟 120 次请求
 limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])

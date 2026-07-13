@@ -433,6 +433,7 @@ class PlatformBrainAgent:
         skill_plan: List[Dict[str, Any]],
         global_params: Optional[Dict[str, Any]] = None,
         on_message: Optional[Callable[[BrainMessage], Awaitable[None]]] = None,
+        llm_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """按顺序执行多个 Skill，前一个的输出可作为后一个的输入。"""
         gp = {**DEFAULT_GLOBAL_PARAMS, **(global_params or {})}
@@ -472,7 +473,7 @@ class PlatformBrainAgent:
                 ))
 
             try:
-                output = await run_skill(skill_id, prompt, params, gp)
+                output = await run_skill(skill_id, prompt, params, gp, llm_model=llm_model)
                 result_entry = {
                     "skill_id": skill_id,
                     "skill_name": skill_name,
@@ -533,6 +534,7 @@ class PlatformBrainAgent:
     async def execute(
         user_input: str,
         global_params: Optional[Dict[str, Any]] = None,
+        llm_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """总控入口：先路由，再执行对应的 Skill 或返回短剧流水线参数。"""
         route_result = await PlatformBrainAgent.route(user_input)
@@ -557,7 +559,7 @@ class PlatformBrainAgent:
             }
 
         if decision == "multi_skill":
-            return await PlatformBrainAgent.execute_multi_skill(skill_plan, global_params)
+            return await PlatformBrainAgent.execute_multi_skill(skill_plan, global_params, llm_model=llm_model)
 
         # single_skill
         first_skill = skill_plan[0]
@@ -568,7 +570,7 @@ class PlatformBrainAgent:
         # 参数提取
         params = await PlatformBrainAgent.extract_params(user_input, skill_id, params)
 
-        output = await PlatformBrainAgent.execute_skill(skill_id, prompt, params, global_params)
+        output = await PlatformBrainAgent.execute_skill(skill_id, prompt, params, global_params, llm_model=llm_model)
 
         return {
             "status": "success" if output.status == "success" else "failed",
@@ -587,6 +589,7 @@ class PlatformBrainAgent:
         user_input: str,
         global_params: Optional[Dict[str, Any]] = None,
         on_message: Optional[Callable[[BrainMessage], Awaitable[None]]] = None,
+        llm_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """#1 流式总控入口：实时推送路由推理、工具调用决策、技能执行进度。
 
@@ -739,7 +742,7 @@ class PlatformBrainAgent:
             ))
 
         try:
-            output = await PlatformBrainAgent.execute_skill(skill_id, prompt, params, global_params)
+            output = await PlatformBrainAgent.execute_skill(skill_id, prompt, params, global_params, llm_model=llm_model)
             if on_message:
                 await on_message(BrainMessage(
                     MSG_SKILL_DONE if output.status == "success" else MSG_SKILL_FAILED,

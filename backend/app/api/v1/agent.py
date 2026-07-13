@@ -867,6 +867,7 @@ class SkillRunReq(BaseModel):
     prompt: str
     params: Optional[Dict[str, Any]] = None
     global_params: Optional[Dict[str, Any]] = None
+    llm_model: Optional[str] = None
 
 
 @router.get("/skills")
@@ -887,6 +888,7 @@ async def run_skill_endpoint(req: SkillRunReq, current_user: User = Depends(get_
             user_input=req.prompt,
             params=req.params or {},
             global_params=req.global_params,
+            llm_model=req.llm_model,
         )
     except Exception as exc:
         logger.error("[Skill] 执行异常 skill_id=%s: %s [%s]", req.skill_id, exc, type(exc).__name__, exc_info=True)
