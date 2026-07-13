@@ -356,10 +356,23 @@ async def llm_json(
             logger.info("[LLMClient] 发送 HTTP 请求 (attempt=%d/%d)", attempt + 1, max_retries)
             response = await AIService.chat(messages, model=model, max_tokens=max_tokens, temperature=temperature)
             logger.info("[LLMClient] HTTP 响应已收到 (attempt=%d/%d)", attempt + 1, max_retries)
+
+            # 检查 API 是否返回了错误
+            if isinstance(response, dict) and response.get("error"):
+                err_obj = response["error"]
+                err_msg = err_obj.get("message", str(err_obj)) if isinstance(err_obj, dict) else str(err_obj)
+                logger.error("[LLMClient] API 返回错误: model=%s error=%s", model, err_msg)
+                raise RuntimeError(f"API 返回错误: {err_msg}")
+
             content = response["choices"][0]["message"]["content"]
+            if not content or not content.strip():
+                logger.error("[LLMClient] LLM 返回空 content, model=%s, 完整响应: %s", model, json.dumps(response, ensure_ascii=False)[:2000])
+                raise ValueError(f"LLM 返回为空 (model={model})")
+
             json_str = _sanitize_control_chars(_extract_json(content) or content.strip())
             if not json_str:
-                raise ValueError("LLM 返回为空")
+                logger.error("[LLMClient] JSON 提取为空, model=%s, content[:500]=%s", model, content[:500])
+                raise ValueError(f"LLM 返回内容无法解析为 JSON (model={model})")
             # 修复 LLM 输出中的非法 JSON 转义序列（如 \d, \w, \! 等）
             json_str = _fix_invalid_escapes(json_str)
             try:
@@ -426,7 +439,7 @@ async def llm_json(
                     )
                 break
 
-    logger.warning("[LLMClient] LLM 调用最终失败: %s [%s]", last_exc, type(last_exc).__name__ if last_exc else "None")
+    logger.warning("[LLMClient] LLM 调用最终失败: %s [%s] (model=%s)", last_exc, type(last_exc).__name__ if last_exc else "None", model)
     if fallback is not None:
         # 缓存 fallback 吗？通常不缓存，因为 fallback 是错误产物
         return fallback

@@ -213,8 +213,14 @@ export function LlmModelSelector({
         if (!mounted) return;
         const list = data || [];
         setModels(list);
-        if (list.length > 0 && !selected) {
-          onSelect(list[0].model_id);
+        if (list.length > 0) {
+          // 检查当前选中的模型是否在列表中
+          const isSelectedValid = selected && list.some(m => m.model_id === selected);
+          if (!isSelectedValid) {
+            // 选中模型无效（可能已从数据库移除），优先选 gpt-5.6-terra，其次取第一个
+            const defaultModel = list.find(m => m.model_id === 'gpt-5.6-terra');
+            onSelect(defaultModel ? defaultModel.model_id : list[0].model_id);
+          }
         }
       })
       .catch((e: any) => {

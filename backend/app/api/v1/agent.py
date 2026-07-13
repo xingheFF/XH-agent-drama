@@ -906,6 +906,8 @@ class SkillRunStreamReq(BaseModel):
     prompt: str
     params: Optional[Dict[str, Any]] = None
     global_params: Optional[Dict[str, Any]] = None
+    conversation_id: Optional[str] = None
+    llm_model: Optional[str] = None
 
 
 @router.post("/skills/run/stream")
@@ -932,6 +934,8 @@ async def run_skill_stream_endpoint(req: SkillRunStreamReq, current_user: User =
                     params=req.params or {},
                     global_params=req.global_params,
                     on_message=on_message,
+                    conversation_id=req.conversation_id,
+                    llm_model=req.llm_model,
                 )
             except Exception as exc:
                 await queue.put(BrainMessage("error", f"执行异常: {exc}"))

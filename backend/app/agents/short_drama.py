@@ -135,7 +135,10 @@ def _render_global_params(prompt: str, params: Optional[Dict[str, str]]) -> str:
 
 
 def _resolve_llm_model(options: Optional[Dict[str, Any]]) -> Optional[str]:
-    """从 options 中解析用户选中的语言模型 ID，未选择则返回 None（使用默认模型）。"""
+    """从 options 中解析用户选中的语言模型 ID，未选择则返回 None（使用默认模型）。
+
+    用户可自由选择任何已接入的 LLM 模型，废弃模型的拦截在 AIService.chat() 出口处统一处理。
+    """
     if not options:
         return None
     return options.get("start.llm_model") or options.get("llm_model") or None

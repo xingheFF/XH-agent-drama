@@ -749,21 +749,23 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ skill_id: skillId, prompt, params, global_params: globalParams }),
     }),
-  runSkillStream: async (
-    skillId: string,
-    prompt: string,
-    params: Record<string, string>,
-    globalParams: Record<string, string> | undefined,
-    onMessage: (msg: BrainStreamMessage) => void,
-    onDone: (data: SkillResultData | null) => void,
-    onError: (err: string) => void,
-    signal?: AbortSignal,
-    // #11 SSE 重连参数
-    maxRetries?: number,
-    onReconnect?: (attempt: number) => void,
-  ): Promise<void> => {
-    const url = `${API_BASE}/agent/skills/run/stream`;
-    const body = JSON.stringify({ skill_id: skillId, prompt, params, global_params: globalParams });
+    runSkillStream: async (
+      skillId: string,
+      prompt: string,
+      params: Record<string, string>,
+      globalParams: Record<string, string> | undefined,
+      onMessage: (msg: BrainStreamMessage) => void,
+      onDone: (data: SkillResultData | null) => void,
+      onError: (err: string) => void,
+      signal?: AbortSignal,
+      // #11 SSE 重连参数
+      maxRetries?: number,
+      onReconnect?: (attempt: number) => void,
+      conversationId?: string,
+      llmModel?: string,
+    ): Promise<void> => {
+      const url = `${API_BASE}/agent/skills/run/stream`;
+      const body = JSON.stringify({ skill_id: skillId, prompt, params, global_params: globalParams, conversation_id: conversationId || undefined, llm_model: llmModel || undefined });
     let finalData: SkillResultData | null = null;
     let succeeded = false;
     const _maxRetries = maxRetries ?? 0;  // 默认不重连

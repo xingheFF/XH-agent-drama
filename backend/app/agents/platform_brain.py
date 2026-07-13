@@ -419,10 +419,12 @@ class PlatformBrainAgent:
         user_input: str,
         params: Optional[Dict[str, Any]] = None,
         global_params: Optional[Dict[str, Any]] = None,
+        history: Optional[List[Dict[str, Any]]] = None,
+        llm_model: Optional[str] = None,
     ) -> SkillOutput:
-        """执行单个 Skill，注入全局参数。"""
+        """执行单个 Skill，注入全局参数和多轮对话历史。"""
         gp = {**DEFAULT_GLOBAL_PARAMS, **(global_params or {})}
-        return await run_skill(skill_id, user_input, params, gp)
+        return await run_skill(skill_id, user_input, params, gp, history=history, llm_model=llm_model)
 
     # ─── 多 Skill 串联执行 ───
 
@@ -791,15 +793,40 @@ class PlatformBrainAgent:
         params: Optional[Dict[str, Any]] = None,
         global_params: Optional[Dict[str, Any]] = None,
         on_message: Optional[Callable[[BrainMessage], Awaitable[None]]] = None,
+        conversation_id: Optional[str] = None,
+        llm_model: Optional[str] = None,
     ) -> Dict[str, Any]:
         """用户明确选择某个 Skill 后，大脑增强执行：
         1. #1 流式参数提取（从用户输入中补全缺失参数）
         2. 全局参数注入
-        3. 执行 Skill
+        3. 执行 Skill（传入多轮对话历史）
         """
         start_time = time.time()
         skill_info = PlatformBrainAgent._get_skill_info(skill_id)
         skill_name = skill_info.get("skill_name", skill_id) if skill_info else skill_id
+
+        # 0. 从数据库加载对话历史（多轮上下文）
+        history: Optional[List[Dict[str, Any]]] = None
+        if conversation_id:
+            try:
+                from app.core.database import SessionLocal
+                from app.models.skill_conversation import SkillMessage
+                db = SessionLocal()
+                try:
+                    msgs = db.query(SkillMessage).filter(
+                        SkillMessage.conversation_id == conversation_id
+                    ).order_by(SkillMessage.created_at.asc()).all()
+                    if msgs:
+                        history = [
+                            {"role": m.role, "content": m.content}
+                            for m in msgs
+                            if m.role in ("user", "assistant") and m.content
+                        ]
+                        logger.info("[PlatformBrain] 加载对话历史 %d 条 conversation=%s", len(history), conversation_id)
+                finally:
+                    db.close()
+            except Exception as exc:
+                logger.warning("[PlatformBrain] 加载对话历史失败 conversation=%s: %s", conversation_id, exc)
 
         # 1. 流式参数提取
         if on_message:
@@ -824,7 +851,7 @@ class PlatformBrainAgent:
             ))
 
         try:
-            output = await PlatformBrainAgent.execute_skill(skill_id, user_input, enhanced_params, global_params)
+            output = await PlatformBrainAgent.execute_skill(skill_id, user_input, enhanced_params, global_params, history=history, llm_model=llm_model)
             if on_message:
                 await on_message(BrainMessage(
                     MSG_SKILL_DONE if output.status == "success" else MSG_SKILL_FAILED,

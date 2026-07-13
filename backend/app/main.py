@@ -1,8 +1,29 @@
 import os
 import asyncio
 import logging
+from logging.handlers import RotatingFileHandler
 from contextlib import asynccontextmanager
 from typing import List
+
+# ── 文件日志配置 ──────────────────────────────────────────
+_log_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs")
+os.makedirs(_log_dir, exist_ok=True)
+_file_handler = RotatingFileHandler(
+    os.path.join(_log_dir, "app.log"),
+    maxBytes=10 * 1024 * 1024,  # 10MB
+    backupCount=5,
+    encoding="utf-8",
+)
+_file_handler.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+logging.root.addHandler(_file_handler)
+logging.root.setLevel(logging.INFO)
+# uvicorn / httpx 也输出到文件
+for _name in ("uvicorn", "uvicorn.access", "httpx", "app"):
+    _lg = logging.getLogger(_name)
+    _lg.addHandler(_file_handler)
 
 logger = logging.getLogger(__name__)
 from fastapi import FastAPI, Request
@@ -138,12 +159,14 @@ def _migrate_model_config_tiers():
 def _seed_model_configs(db: Session):
     """初始化模型配置种子数据。
 
-    图片/视频生成模型采用白名单管理，未接入的会被清理；
-    语言大模型（llm）允许用户自行配置，不会被自动删除。
+    所有模型类型（image/video/llm）均采用白名单管理，
+    未在种子列表中的模型启动时自动清理。
+    同时强制删除 config.py 中 DEPRECATED_MODELS 列出的废弃模型。
     """
     from app.models.model_config import ModelConfig
+    from sqlalchemy import text
 
-    # 系统内置的图片/视频模型白名单；llm 类型只保留代码/配置中实际默认使用的模型，其余由用户自行维护
+    # 系统内置模型白名单（image/video/llm 统一管理）
     seeds = [
         ("gpt-image-2", "gpt-image-2", "image", "OpenAI GPT-Image-2", 10),
         ("gemini-3.1-flash-lite-image", "Gemini 3.1 Flash Lite", "image", "Google Gemini 图片模型 (Nano Banana Lite)", 10),
@@ -160,31 +183,25 @@ def _seed_model_configs(db: Session):
     ]
     allowed_ids = {model_id for model_id, *_ in seeds}
 
-    # 已废弃的 LLM 模型（从种子列表中移除的模型，启动时自动清理）
-    deprecated_llm_ids = {"doubao-seed-2-1-turbo-260628", "deepseek-v4-flash"}
-    deprecated = (
-        db.query(ModelConfig)
-        .filter(ModelConfig.model_id.in_(deprecated_llm_ids))
-        .all()
-    )
-    for cfg in deprecated:
-        db.delete(cfg)
-    if deprecated:
-        logger.info("[seed] 清理已废弃 LLM 模型 %d 条: %s", len(deprecated), [c.model_id for c in deprecated])
+    # 1. 用原生 SQL 强制删除废弃模型（不依赖 ORM 的 notin_ 逻辑，防止兼容性问题）
+    from app.core.config import settings as _settings
+    for dep_id in _settings.DEPRECATED_MODELS:
+        result = db.execute(text("DELETE FROM model_configs WHERE model_id = :mid"), {"mid": dep_id})
+        if result.rowcount > 0:
+            logger.info("[seed] 强制删除废弃模型: %s (影响 %d 行)", dep_id, result.rowcount)
 
-    # 只清理图片/视频生成模型中的未接入配置，保留用户自己接入的语言大模型
+    # 2. 清理所有不在白名单中的模型（image/video/llm 统一清理）
     stale = (
         db.query(ModelConfig)
-        .filter(ModelConfig.type.in_(["image", "video"]))
         .filter(ModelConfig.model_id.notin_(allowed_ids))
         .all()
     )
     for cfg in stale:
         db.delete(cfg)
     if stale:
-        logger.info("[seed] 清理未接入图片/视频模型 %d 条: %s", len(stale), [c.model_id for c in stale])
+        logger.info("[seed] 清理未接入模型 %d 条: %s", len(stale), [c.model_id for c in stale])
 
-    # 添加缺失的模型配置；已存在的 llm 模型保持原样，避免覆盖用户自定义名称/积分
+    # 3. 添加缺失的模型配置；已存在的保持原样，避免覆盖用户自定义名称/积分
     for model_id, name, mtype, description, credits in seeds:
         existing = db.query(ModelConfig).filter(ModelConfig.model_id == model_id).first()
         if not existing:
@@ -746,6 +763,28 @@ def create_app() -> FastAPI:
             "db": "ok" if db_ok else f"error: {db_error}",
             "ws_connections": ws_manager.get_connection_count(),
             "active_tasks": len([t for t in task_manager.get_all_tasks() if t.status in (TaskStatus.RUNNING, TaskStatus.QUEUED)]),
+        }
+
+    @app.get("/debug/llm-model", tags=["debug"])
+    def debug_llm_model():
+        """诊断接口：查看系统实际使用的 LLM 模型配置。"""
+        from app.services.ai_service import _sanitize_llm_model
+        from app.core.model_tiers import resolve_model, resolve_model_for_agent, TaskTier
+        return {
+            "LLM_MODEL_NAME (默认模型)": settings.LLM_MODEL_NAME,
+            "LLM_PROVIDER (服务商)": settings.LLM_PROVIDER,
+            "LLM_MODEL_LITE (轻量)": settings.LLM_MODEL_LITE,
+            "LLM_MODEL_STANDARD (标准)": settings.LLM_MODEL_STANDARD,
+            "LLM_MODEL_CREATIVE (旗舰)": settings.LLM_MODEL_CREATIVE,
+            "DEPRECATED_MODELS (废弃列表)": list(settings.DEPRECATED_MODELS),
+            "resolve_model(LITE)": resolve_model(TaskTier.LITE),
+            "resolve_model(STANDARD)": resolve_model(TaskTier.STANDARD),
+            "resolve_model(CREATIVE)": resolve_model(TaskTier.CREATIVE),
+            "resolve_model_for_agent(platform_brain)": resolve_model_for_agent("platform_brain"),
+            "resolve_model_for_agent(param_extractor)": resolve_model_for_agent("param_extractor"),
+            "_sanitize_llm_model(None)": _sanitize_llm_model(None),
+            "_sanitize_llm_model('gpt-5.6-terra')": _sanitize_llm_model("gpt-5.6-terra"),
+            "_sanitize_llm_model('deepseek-v4-flash')": _sanitize_llm_model("deepseek-v4-flash"),
         }
 
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)

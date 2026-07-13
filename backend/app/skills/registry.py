@@ -13,6 +13,8 @@ from app.skills.muzi_generator import MuziGeneratorSkill
 from app.skills.seedance_prompt import SeedancePromptSkill
 from app.skills.xyq_short_drama import XyqShortDramaSkill
 from app.skills.storyboard_director import StoryboardDirectorSkill
+from app.skills.script_video_prompt_architect import ScriptVideoPromptArchitectSkill
+from app.skills.novel_director import NovelDirectorSkill
 
 
 class SkillRegistry:
@@ -30,6 +32,8 @@ class SkillRegistry:
         self.register(SeedancePromptSkill())
         self.register(XyqShortDramaSkill())
         self.register(StoryboardDirectorSkill())
+        self.register(ScriptVideoPromptArchitectSkill())
+        self.register(NovelDirectorSkill())
         # 旧版技能（保留向后兼容）
         self.register(StoryCreationSkill())
         self.register(ShotBreakdownSkill())
@@ -66,8 +70,10 @@ async def run_skill(
     user_input: str,
     params: Optional[Dict[str, Any]] = None,
     global_params: Optional[Dict[str, Any]] = None,
+    history: Optional[List[Dict[str, Any]]] = None,
+    llm_model: Optional[str] = None,
 ) -> SkillOutput:
-    """执行指定 Skill，支持大脑注入的全局参数。"""
+    """执行指定 Skill，支持大脑注入的全局参数和多轮对话历史。"""
     skill = skill_registry.get(skill_id)
     if not skill:
         return SkillOutput(
@@ -75,4 +81,6 @@ async def run_skill(
             status="failed",
             error=f"未找到 Skill: {skill_id}",
         )
-    return await skill.run(user_input, params, global_params)
+    # 将用户选择的 LLM 模型设置到 skill 实例上
+    skill._llm_model = llm_model
+    return await skill.run(user_input, params, global_params, history=history)

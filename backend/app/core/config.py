@@ -111,6 +111,16 @@ class Settings(BaseSettings):
     MEMORY_CACHE_MAX_SIZE: int = int(os.getenv("MEMORY_CACHE_MAX_SIZE", "500"))
     MEMORY_CACHE_TTL: int = int(os.getenv("MEMORY_CACHE_TTL", "1800"))
 
+    # ── 废弃模型硬编码列表（一劳永逸拦截） ──────────
+    # 这些模型 ID 无论出现在哪里（旧会话 options、节点 config、前端传参），
+    # 都会在 AIService.chat() 出口处被替换为 LLM_MODEL_NAME。
+    # 用户可以自由选择数据库中任何已启用的 LLM 模型，只有这个列表中的才会被拦截。
+    # 新增废弃模型时，只需在这里加一行即可。
+    DEPRECATED_MODELS: set = {
+        "deepseek-v4-flash",
+        "doubao-seed-2-1-turbo-260628",
+    }
+
     # ── #6 模型分级策略 ──────────────────────────────
     # 轻量模型：路由决策、参数提取、简单审核（快速、低成本）
     LLM_MODEL_LITE: str = os.getenv("LLM_MODEL_LITE", "gpt-5.6-terra")

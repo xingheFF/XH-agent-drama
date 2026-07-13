@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.agents.llm_utils import llm_json
 from app.skills.base import BaseSkill, SkillInfo, SkillOutput, SkillParam
@@ -83,6 +83,7 @@ class StoryCreationSkill(BaseSkill):
         user_input: str,
         params: Optional[Dict[str, Any]] = None,
         global_params: Optional[Dict[str, Any]] = None,
+        history: Optional[List[Dict[str, Any]]] = None,
     ) -> SkillOutput:
         merged = self.merge_params(params)
         system_prompt = self._render_global_params(self.system_prompt, global_params)
@@ -94,9 +95,13 @@ class StoryCreationSkill(BaseSkill):
 核心卖点：{merged.get('核心卖点')}
 """.strip()
 
+        # 注入多轮对话历史上下文
+        user_content = self._build_user_content_with_history(user_content, history)
+
         result = await llm_json(
             system_prompt,
             user_content,
+    model=self._llm_model,
             max_tokens=16384,
             temperature=0.3,
             fallback={

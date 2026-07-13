@@ -14,7 +14,7 @@ Skill: storyboard-director
 """
 import os
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.agents.llm_utils import llm_json
 from app.skills.base import BaseSkill, SkillInfo, SkillOutput, SkillParam
@@ -270,6 +270,7 @@ class StoryboardDirectorSkill(BaseSkill):
         user_input: str,
         params: Optional[Dict[str, Any]] = None,
         global_params: Optional[Dict[str, Any]] = None,
+        history: Optional[List[Dict[str, Any]]] = None,
     ) -> SkillOutput:
         merged = self.merge_params(params)
         system_prompt = self._build_system_prompt(merged)
@@ -282,9 +283,13 @@ class StoryboardDirectorSkill(BaseSkill):
 请按照 STEP 1–7 流程执行，输出完整的分镜脚本设计表、多宫格分镜故事板提示词和视频提示词。
 """
 
+        # 注入多轮对话历史上下文
+        user_content = self._build_user_content_with_history(user_content, history)
+
         result = await llm_json(
             system_prompt,
             user_content,
+    model=self._llm_model,
             max_tokens=16384,
             temperature=0.4,
             fallback={

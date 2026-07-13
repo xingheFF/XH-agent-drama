@@ -47,6 +47,7 @@ class SkillOutput:
 class BaseSkill(ABC):
     info: SkillInfo
     system_prompt: str = ""
+    _llm_model: Optional[str] = None  # 用户选择的 LLM 模型，由 run_skill() 设置
 
     @abstractmethod
     async def run(
@@ -54,6 +55,7 @@ class BaseSkill(ABC):
         user_input: str,
         params: Optional[Dict[str, Any]] = None,
         global_params: Optional[Dict[str, Any]] = None,
+        history: Optional[List[Dict[str, Any]]] = None,
     ) -> SkillOutput:
         """
         执行 Skill。
@@ -62,8 +64,51 @@ class BaseSkill(ABC):
         :param params: 前端传入的参数（已合并默认值）
         :param global_params: 大脑注入的全局参数（画幅、渲染基准、镜头基准等），
                               用于渲染 system_prompt 中的 {{占位符}}
+        :param history: 之前的对话历史，格式为 [{"role": "user"|"assistant", "content": "..."}, ...]
+                        Skill 可将其拼入 user_content 让 LLM 理解上下文。
         """
         raise NotImplementedError
+
+    @staticmethod
+    def _format_history(history: Optional[List[Dict[str, Any]]]) -> str:
+        """将对话历史格式化为文本块，供拼入 user_content。
+
+        如果没有历史或只有 1 条，返回空字符串（首轮对话不需要上下文）。
+        最多取最近 10 轮（20 条消息），避免 token 爆炸。
+        """
+        if not history or len(history) <= 1:
+            return ""
+        # 取最近的消息，最多 20 条
+        recent = history[-20:]
+        lines: List[str] = ["--- 之前的对话历史（请参考上下文理解当前请求）---"]
+        for msg in recent:
+            role = msg.get("role", "")
+            content = msg.get("content", "")
+            if not content:
+                continue
+            # 截断过长的历史消息（单条最多 2000 字）
+            if len(content) > 2000:
+                content = content[:2000] + "...(内容已截断)"
+            if role == "user":
+                lines.append(f"【用户】{content}")
+            elif role == "assistant":
+                lines.append(f"【AI回复】{content}")
+        lines.append("--- 当前请求 ---")
+        return "\n\n".join(lines) + "\n\n"
+
+    @staticmethod
+    def _build_user_content_with_history(
+        user_input: str,
+        history: Optional[List[Dict[str, Any]]],
+    ) -> str:
+        """将对话历史拼到 user_input 前面，形成带上下文的 user_content。
+
+        首轮对话（无历史）时直接返回原 user_input，不影响 LLM 调用。
+        """
+        history_block = BaseSkill._format_history(history)
+        if not history_block:
+            return user_input
+        return f"{history_block}{user_input}"
 
     def merge_params(self, params: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         merged: Dict[str, Any] = {}

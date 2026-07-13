@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from app.agents.llm_utils import llm_json
 from app.skills.base import BaseSkill, SkillInfo, SkillOutput, SkillParam
@@ -78,6 +78,7 @@ class SceneDesignSkill(BaseSkill):
         user_input: str,
         params: Optional[Dict[str, Any]] = None,
         global_params: Optional[Dict[str, Any]] = None,
+        history: Optional[List[Dict[str, Any]]] = None,
     ) -> SkillOutput:
         merged = self.merge_params(params)
         system_prompt = self._render_global_params(self.system_prompt, global_params)
@@ -89,9 +90,13 @@ class SceneDesignSkill(BaseSkill):
 产出类型：{merged.get('产出类型')}
 """.strip()
 
+        # 注入多轮对话历史上下文
+        user_content = self._build_user_content_with_history(user_content, history)
+
         result = await llm_json(
             system_prompt,
             user_content,
+    model=self._llm_model,
             max_tokens=4096,
             temperature=0.3,
             fallback={

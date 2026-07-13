@@ -9,6 +9,32 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
+# ── LLM 废弃模型拦截（唯一拦截点） ──
+# 所有 LLM 调用的唯一必经之路：AIService.chat() / chat_stream()
+# 用硬编码集合判断，不查数据库，零延迟，零依赖。
+# 用户可自由选择数据库中任何已启用的 LLM 模型，只有 DEPRECATED_MODELS 中的才会被拦截。
+
+
+def _sanitize_llm_model(model_id: Optional[str]) -> str:
+    """拦截已废弃的 LLM 模型 ID，替换为全局默认模型。
+
+    硬编码判断，不查数据库：
+    - model_id 为 None/空 → 返回默认模型
+    - model_id 在 DEPRECATED_MODELS 中 → 返回默认模型，打日志
+    - 其他情况 → 原样返回（用户自由选择的模型直接放行）
+    """
+    default_model = settings.LLM_MODEL_NAME or "gpt-5.6-terra"
+
+    if not model_id:
+        return default_model
+
+    if model_id in settings.DEPRECATED_MODELS:
+        logger.warning("[AIService] 拦截废弃模型 %s → %s", model_id, default_model)
+        return default_model
+
+    return model_id
+
+
 # 与 main.py / asset.py / ai_worker.py 保持一致的 uploads 根目录：backend/app/uploads
 # ai_service.py 位于 backend/app/services/ai_service.py
 # os.path.dirname(os.path.dirname(__file__)) = backend/app
@@ -488,7 +514,9 @@ class AIService:
             max_tokens: 限制输出 token 数，None 时使用默认值 4096。
             temperature: 采样温度，默认 0.3（偏低，适合结构化 JSON 输出，减少发散缩短输出长度）。
         """
-        model = model or settings.LLM_MODEL_NAME
+        raw_model = model
+        model = _sanitize_llm_model(model)
+        logger.warning("[AIService] chat() 模型解析: 输入=%s → 实际发送=%s", raw_model, model)
         provider = str(settings.LLM_PROVIDER or "ark").lower()
         payload = {
             "model": model,
@@ -496,7 +524,13 @@ class AIService:
             "temperature": temperature,
             "max_tokens": max_tokens or 4096,
         }
-        return await AIService._post("/v1/chat/completions", payload, provider if provider in ("ark", "api91") else "ark")
+        result = await AIService._post("/v1/chat/completions", payload, provider if provider in ("ark", "api91") else "ark")
+        # 记录 API 返回的实际模型名（API 服务商可能在后端做了别名映射）
+        if isinstance(result, dict):
+            resp_model = result.get("model", "")
+            if resp_model and resp_model != model:
+                logger.warning("[AIService] ⚠️ API 返回模型名与请求不一致! 请求=%s → API返回=%s（可能是服务商别名映射）", model, resp_model)
+        return result
 
     @staticmethod
     async def chat_stream(
@@ -510,7 +544,8 @@ class AIService:
         Yields:
             str: 每个 delta content chunk
         """
-        model = model or settings.LLM_MODEL_NAME
+        model = _sanitize_llm_model(model)
+        logger.warning("[AIService] chat_stream() 模型: %s", model)
         provider = str(settings.LLM_PROVIDER or "ark").lower()
         api_type = provider if provider in ("ark", "api91") else "ark"
 

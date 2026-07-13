@@ -6,7 +6,7 @@ import {
   ChevronRight, FolderOpen, User,
   FilePlus, Upload, Search, Package, Film, BookOpen, Wand2,
   Palette, MapPin, Music, Loader2, Video, Layers, Film as FilmIcon, LayoutGrid,
-  Zap, AlertCircle, Clapperboard as ClapperIcon, PenLine, type LucideIcon
+  Zap, AlertCircle, Clapperboard as ClapperIcon, PenLine, FileText, type LucideIcon
 } from 'lucide-react';
 import { useEditorStore } from '@/store/editor';
 import { api } from '@/utils/api';
@@ -40,6 +40,8 @@ const FEATURES = [
   { title: 'Seedance提示词', skill_id: 'seedance-prompt-zh', desc: '即梦Seedance 2.0多模态视频提示词', icon: Video, color: 'from-amber-600 to-red-700' },
   { title: '短剧剧本创作', skill_id: 'xyq-short-drama', desc: '一句话创意展开为完整短剧剧本', icon: PenLine, color: 'from-violet-600 to-purple-700' },
   { title: '分镜导演台本', skill_id: 'storyboard-director', desc: '小说自动拆解为专业分镜导演台本', icon: ClapperIcon, color: 'from-fuchsia-600 to-pink-700' },
+  { title: '剧本视频提示词', skill_id: 'script-video-prompt-architect', desc: '剧本转Seedance 2.0视频生成提示词', icon: FileText, color: 'from-indigo-700 to-blue-800' },
+  { title: 'AI小说导演板', skill_id: 'novel-director', desc: '互动小说创作·回合制导演板模式', icon: Feather, color: 'from-rose-600 to-orange-700' },
 ];
 
 const SCRIPT_TEMPLATES = [
@@ -134,6 +136,30 @@ const SKILL_TEMPLATES: SkillTemplate[] = [
       { name: '画幅', type: 'select', options: ['9:16竖屏', '16:9横屏', '1:1方形'], default: '9:16竖屏' },
       { name: '镜头数限制', type: 'select', options: ['20镜', '30镜', '50镜', '80镜', '不限'], default: '30镜' },
       { name: '目标平台', type: 'select', options: ['抖音', '快手', 'B站', '小红书', 'YouTube'], default: '抖音' },
+    ],
+  },
+  {
+    skill_id: 'script-video-prompt-architect',
+    title: '短剧视频提示词架构师',
+    desc: '基于剧本进行导演分镜拆解，输出Seedance 2.0视频提示词',
+    icon: FileText,
+    params: [
+      { name: '视频画风', type: 'select', options: ['真人写实', '古装真人写实', '现代都市写实', '悬疑暗黑写实', '甜宠轻喜写实', '奇幻玄幻写实', '2D动漫', '赛博朋克', '水墨国风', '复古胶片'], default: '真人写实' },
+      { name: '画幅比例', type: 'select', options: ['9:16竖屏', '16:9横屏', '1:1方形'], default: '9:16竖屏' },
+      { name: '集数编号', type: 'text', default: '第1集', description: '当前处理的集数编号' },
+    ],
+  },
+  {
+    skill_id: 'novel-director',
+    title: 'AI互动小说导演板',
+    desc: '导演板模式互动小说创作·回合制分镜演绎·支持长篇连载',
+    icon: Feather,
+    params: [
+      { name: '小说标题', type: 'text', required: true, description: '小说的标题' },
+      { name: '类型题材', type: 'select', options: ['悬疑推理', '都市言情', '古风宫斗', '青春校园', '科幻未来', '武侠江湖', '奇幻玄幻', '恐怖惊悚', '喜剧幽默', '黑色幽默', '战争军事', '历史传记'], default: '悬疑推理' },
+      { name: '预计章节数', type: 'text', default: '10章', description: '预计完成的总章节数' },
+      { name: '主角设定', type: 'text', required: true, description: '主角姓名和背景简介' },
+      { name: '叙事模式', type: 'select', options: ['导演板模式（回合制互动演绎）', '一口气模式（AI连续演绎完整章节）'], default: '导演板模式（回合制互动演绎）' },
     ],
   },
 ];
@@ -480,6 +506,8 @@ export function HomeView({ onOpenAgent }: HomeViewProps) {
       : skill.icon === Layers ? 'Layers'
       : skill.icon === FilmIcon ? 'Film'
       : skill.icon === Video ? 'Video'
+      : skill.icon === FileText ? 'FileText'
+      : skill.icon === Feather ? 'Feather'
       : 'Sparkles';
     const skillDef: SkillDef = {
       skill_id: skill.skill_id,

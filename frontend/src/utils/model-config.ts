@@ -228,7 +228,7 @@ export function getDefaultModelForNodeType(nodeType: string): string {
   if (nodeType === 'storyboard') return 'gpt-image-2';
   if (nodeType === 'video') return 'doubao-seedance-2-0-260128';
   if (nodeType === 'audio') return 'default';
-  if (nodeType === 'script') return _runtimeDefaultLlm || 'deepseek-v4-flash';
+  if (nodeType === 'script') return _runtimeDefaultLlm || 'gpt-5.6-terra';
   return '';
 }
 

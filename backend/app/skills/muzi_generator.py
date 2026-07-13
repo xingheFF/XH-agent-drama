@@ -234,6 +234,7 @@ class MuziGeneratorSkill(BaseSkill):
         result = await llm_json(
             system_prompt,
             user_content,
+    model=self._llm_model,
             max_tokens=16384,
             temperature=0.4,
             fallback={

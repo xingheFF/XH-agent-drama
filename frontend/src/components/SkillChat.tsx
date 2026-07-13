@@ -19,6 +19,7 @@ import {
 import { api, skillConversationsApi } from '@/utils/api';
 import type { SkillConversationItem, SkillMessageItem } from '@/utils/api';
 import type { BrainStreamMessage } from '@/types';
+import { LlmModelSelector } from '@/components/AgentChat/Controls';
 // #12 公共组件去重
 import type { ChatMessage } from '@/components/chat/types';
 import { useAutoScroll, TypingIndicator } from '@/components/chat';
@@ -45,7 +46,7 @@ export interface SkillDef {
 
 // ─── 图标映射 ────────────────────────────────────────
 
-import { BookOpen, Clapperboard, Video, Layers, Film, PenLine, Clapperboard as ClapperIcon } from 'lucide-react';
+import { BookOpen, Clapperboard, Video, Layers, Film, PenLine, Clapperboard as ClapperIcon, FileText, Feather } from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   BookOpen,
@@ -55,6 +56,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Film,
   PenLine,
   ClapperIcon,
+  FileText,
+  Feather,
 };
 
 // 技能专属渐变色
@@ -66,6 +69,8 @@ const SKILL_GRADIENTS: Record<string, string> = {
   'seedance-prompt-zh': 'from-orange-500 to-amber-500',
   'xyq-short-drama': 'from-violet-600 to-purple-600',
   'storyboard-director': 'from-fuchsia-500 to-pink-600',
+  'script-video-prompt-architect': 'from-indigo-600 to-blue-600',
+  'novel-director': 'from-rose-600 to-orange-600',
 };
 
 function getIcon(name: string): LucideIcon {
@@ -122,6 +127,18 @@ function getGuideSteps(skillId: string): { title: string; desc: string }[] {
         { title: '镜头语言分析', desc: '自动执行两轴查询与风险注入' },
         { title: '输出分镜台本', desc: '多宫格分镜板+视频提示词' },
       ];
+    case 'script-video-prompt-architect':
+      return [
+        { title: '粘贴剧本原文', desc: '提交一集或片段的短剧剧本' },
+        { title: '三阶段处理', desc: '剧本分析→分镜拆解→Seedance提示词' },
+        { title: '输出视频提示词', desc: '逐镜头分镜脚本+Seedance 2.0提示词' },
+      ];
+    case 'novel-director':
+      return [
+        { title: '设定场景人物', desc: '输入场景、人物、冲突、氛围' },
+        { title: 'AI分镜演绎', desc: 'AI演绎一段剧情，在决策点停下' },
+        { title: '导演掌控走向', desc: '选择选项或自由输入，决定剧情方向' },
+      ];
     default:
       return [
         { title: '输入内容', desc: '在下方输入框中输入内容' },
@@ -140,6 +157,8 @@ function getPlaceholder(skillId: string): string {
     case 'seedance-prompt-zh': return '描述你想创作的视频内容、主题或创意...';
     case 'xyq-short-drama': return '输入一句话创意，如：快递小哥意外获得读心术...';
     case 'storyboard-director': return '粘贴故事/小说/剧本片段，生成分镜导演台本...';
+    case 'script-video-prompt-architect': return '粘贴短剧剧本原文，生成分镜脚本和Seedance视频提示词...';
+    case 'novel-director': return '【场景】深夜码头，暴雨\n【人物】陈Sir（退休刑警，谨慎念旧）\n【冲突】两人互相猜忌\n【氛围】港片 noir...';
     default: return '输入内容...';
   }
 }
@@ -160,6 +179,10 @@ function getExamples(skillId: string): string[] {
       return ['快递小哥意外获得读心术，发现客户秘密', '考古队在古墓中发现活了千年的少女'];
     case 'storyboard-director':
       return ['雨夜破庙前，男主握长剑而立，黑衣人持刀逼近...', '咖啡店里两个陌生人的眼神交汇，时间仿佛静止'];
+    case 'script-video-prompt-architect':
+      return ['第一场 夜 皇宫偏院 灵汐手持灯笼穿行...', '男主在咖啡店偶遇前女友，两人尴尬对坐...'];
+    case 'novel-director':
+      return ['【场景】深夜码头，暴雨\n【人物】陈Sir（退休刑警）阿鬼（线人）\n【冲突】互相猜忌有无带人', '【场景】古寺黄昏\n【人物】少年剑客、神秘老僧\n【冲突】少年索要失落剑谱'];
     default:
       return ['试试输入你的创意...'];
   }
@@ -343,6 +366,7 @@ export function SkillChat({ skill, page }: SkillChatProps) {
     return defaults;
   });
   const [showParamPanel, setShowParamPanel] = useState(false);
+  const [llmModel, setLlmModel] = useState<string | null>(null);
 
   // 消息状态
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -526,6 +550,10 @@ finalData = msg.data;
           if (convId) saveMessage(convId, 'error', err || '技能执行失败，请重试');
         },
         abortRef.current.signal,
+        undefined,
+        undefined,
+        convId || undefined,
+        llmModel || undefined,
       );
     } catch (err: any) {
       setMessages((prev) => [
@@ -777,6 +805,8 @@ finalData = msg.data;
         </button>
       </div>
       <div className="space-y-4">
+        {/* LLM 模型选择 */}
+        <LlmModelSelector selected={llmModel} onSelect={setLlmModel} />
         {skill.params.map((p) => (
           <div key={p.name}>
             <label className="text-xs font-medium text-theme-sub mb-2 block">{p.name}</label>
@@ -816,8 +846,14 @@ finalData = msg.data;
       <div className="max-w-4xl mx-auto relative">
         {paramOverlay}
         {/* 参数chips行 */}
-        {paramChips.length > 0 && (
+        {(paramChips.length > 0 || llmModel) && (
           <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+            {llmModel && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-teal-600/8 border border-teal-600/20 text-xs text-teal-600">
+                <span className="text-teal-600/60">模型:</span>
+                <span className="font-medium">{llmModel}</span>
+              </span>
+            )}
             {paramChips.map((chip) => (
               <span key={chip.name} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-canvas-bg border border-panel-border text-xs text-theme-sub">
                 <span className="text-theme-hint">{chip.name}:</span>
