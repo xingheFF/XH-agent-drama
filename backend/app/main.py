@@ -780,6 +780,78 @@ def create_app() -> FastAPI:
             "_sanitize_llm_model('deepseek-v4-flash')": _sanitize_llm_model("deepseek-v4-flash"),
         }
 
+    @app.get("/debug/video-config", tags=["debug"])
+    def debug_video_config():
+        """诊断接口：查看视频生成模型配置和 API Key 状态。"""
+        from app.services.ai_service import _is_placeholder_key
+        return {
+            "MODELINK_API_BASE_URL": settings.MODELINK_API_BASE_URL,
+            "MODELINK_API_KEY (已配置)": bool(settings.MODELINK_API_KEY and "YOUR_" not in settings.MODELINK_API_KEY),
+            "MODELINK_API_KEY (前6位)": settings.MODELINK_API_KEY[:6] + "..." if settings.MODELINK_API_KEY else "(空)",
+            "MODELINK_VIDEO_MODEL_ID": settings.MODELINK_VIDEO_MODEL_ID,
+            "VOLCENGINE_ARK_API_KEY (已配置)": bool(settings.VOLCENGINE_ARK_API_KEY and "YOUR_" not in settings.VOLCENGINE_ARK_API_KEY),
+            "VOLCENGINE_ARK_MODEL_ID_STANDARD": settings.VOLCENGINE_ARK_MODEL_ID_STANDARD,
+            "VOLCENGINE_ARK_MODEL_ID_FAST": settings.VOLCENGINE_ARK_MODEL_ID_FAST,
+            "DASHSCOPE_API_KEY (已配置)": bool(settings.DASHSCOPE_API_KEY and "YOUR_" not in settings.DASHSCOPE_API_KEY),
+            "uploads/videos 目录存在": os.path.isdir(os.path.join(uploads_dir, "videos")),
+            "uploads/videos 文件数": len(os.listdir(os.path.join(uploads_dir, "videos"))) if os.path.isdir(os.path.join(uploads_dir, "videos")) else 0,
+        }
+
+    @app.post("/debug/modelink-test", tags=["debug"])
+    async def debug_modelink_test(prompt: str = "一只猫在草地上奔跑"):
+        """诊断接口：直接调用 Modelink API 测试视频生成流程。"""
+        import httpx
+        import json as _json
+
+        if not settings.MODELINK_API_KEY:
+            return {"error": "MODELINK_API_KEY 未配置"}
+
+        base_url = settings.MODELINK_API_BASE_URL.rstrip("/")
+        endpoint = "/queue/fal-ai/vidu/q3/text-to-video/turbo"
+        url = f"{base_url}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {settings.MODELINK_API_KEY}",
+            "Content-Type": "application/json",
+        }
+        payload = {"prompt": prompt, "duration": 4, "aspect_ratio": "16:9"}
+
+        result = {"step1_create": {}, "step2_poll": {}, "step3_video_url": ""}
+
+        # Step 1: 创建任务
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                result["step1_create"]["status_code"] = resp.status_code
+                result["step1_create"]["response"] = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else resp.text[:500]
+        except Exception as exc:
+            result["step1_create"]["error"] = str(exc)
+            return result
+
+        # Step 2: 轮询状态
+        create_data = result["step1_create"].get("response", {})
+        if not isinstance(create_data, dict):
+            return result
+
+        request_id = create_data.get("request_id")
+        response_url = create_data.get("response_url", "")
+        result["step2_poll"]["request_id"] = request_id
+        result["step2_poll"]["response_url"] = response_url
+
+        if not response_url and request_id:
+            response_url = f"{base_url}/queue/fal-ai/vidu/q3/text-to-video/turbo/requests/{request_id}"
+
+        if response_url:
+            try:
+                async with httpx.AsyncClient(timeout=30) as client:
+                    resp = await client.get(response_url, headers=headers)
+                    result["step2_poll"]["status_code"] = resp.status_code
+                    poll_data = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {}
+                    result["step2_poll"]["response"] = _json.dumps(poll_data, ensure_ascii=False)[:1000] if poll_data else resp.text[:500]
+            except Exception as exc:
+                result["step2_poll"]["error"] = str(exc)
+
+        return result
+
     app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
     return app

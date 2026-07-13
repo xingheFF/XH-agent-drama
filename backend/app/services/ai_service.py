@@ -55,6 +55,15 @@ def _is_placeholder_key(key: Optional[str]) -> bool:
     return not key or "YOUR_" in key
 
 
+def _nested_url(obj: Any) -> Optional[str]:
+    """从嵌套对象中提取 url 字段，兼容 fal.ai 的 {"video": {"url": "..."}} 格式。"""
+    if isinstance(obj, str) and obj.startswith(("http://", "https://")):
+        return obj
+    if isinstance(obj, dict):
+        return obj.get("url") or obj.get("video_url") or obj.get("download_url")
+    return None
+
+
 def _public_url(url: str) -> str:
     """把 /uploads 或 /api/uploads 相对地址补全为 PUBLIC_BASE_URL 绝对地址。"""
     if not isinstance(url, str):
@@ -1460,6 +1469,7 @@ class AIService:
 
         logger.info("[AIService] Modelink payload: endpoint=%s duration=%s res=%s", endpoint, duration, resolution)
         response = await AIService._post(endpoint, payload, "modelink")
+        logger.info("[AIService] Modelink 创建任务响应: %s", json.dumps(response, ensure_ascii=False)[:1000] if isinstance(response, dict) else str(response)[:1000])
 
         # Modelink 返回 {"status": "IN_QUEUE", "request_id": "...", "response_url": "..."}
         request_id = response.get("request_id") if isinstance(response, dict) else None
@@ -1535,20 +1545,10 @@ class AIService:
             return {**data, "status": mapped, "video_url": data.get("output", {}).get("video_url")}
 
         if normalized in {"viduq3-turbo", "vidu-q3-turbo", settings.MODELINK_VIDEO_MODEL_ID.lower()}:
-            # Modelink 通过 response_url 轮询任务状态
-            # response_url 在创建任务时返回，存在 task.params["_response_url"] 中
-            # 如果没有 response_url，尝试用 request_id 构造查询 URL
-            response_url = None
-            # ai_worker 会把 response_url 存到 task.params 中，check_video_status 只能拿到 task_id 和 model
-            # 这里尝试用 request_id 直接 GET response_url（由调用方传入 _response_url）
-            # 由于 check_video_status 签名限制，我们利用 task_id 本身作为 request_id
-            # 如果 response_url 存在于 task.params，ai_worker 会在调用前将其拼入 task_id 参数
-            # 实际实现：ai_worker 将 response_url 存入 task.params["_response_url"]，
-            # 然后在轮询前通过特殊格式 "task_id|response_url" 传入
+            # Modelink 通过 response_url 轮询任务状态（fal.ai 队列模式）
             if "|" in task_id:
                 _real_id, response_url = task_id.split("|", 1)
             else:
-                # 没有 response_url 时，尝试用 request_id 构造（Fal 队列查询地址）
                 response_url = _join_url(
                     settings.MODELINK_API_BASE_URL,
                     f"/queue/fal-ai/vidu/q3/text-to-video/turbo/requests/{task_id}",
@@ -1564,20 +1564,34 @@ class AIService:
                 logger.warning("[AIService] Modelink 状态查询失败 task=%s err=%s", task_id, exc)
                 return {"status": "processing"}
 
+            logger.info("[AIService] Modelink 状态响应 task=%s body=%s", task_id, json.dumps(data, ensure_ascii=False)[:1000])
+
             raw_status = str(data.get("status") or "").lower()
             mapped = (
                 "completed" if raw_status in {"completed", "success", "succeeded", "done", "COMPLETED"} else
                 "failed" if raw_status in {"failed", "error", "canceled", "cancelled"} else "processing"
             )
 
-            # 提取 video_url：Modelink 返回格式可能为 data.video_url 或 data.output.video_url
+            # 提取 video_url：兼容多种响应格式
+            # fal.ai 标准格式: {"output": {"video": {"url": "..."}}}
+            # Modelink 可能格式: {"video_url": "..."} 或 {"output": {"video_url": "..."}}
             video_url = data.get("video_url")
             if not video_url:
                 output = data.get("output") or data.get("data") or {}
                 if isinstance(output, dict):
-                    video_url = output.get("video_url") or output.get("url")
-                elif isinstance(output, list) and output:
-                    video_url = output[0].get("video_url") or output[0].get("url") if isinstance(output[0], dict) else None
+                    video_url = (
+                        output.get("video_url")
+                        or output.get("url")
+                        or _nested_url(output.get("video"))  # output.video.url
+                    )
+                elif isinstance(output, list) and output and isinstance(output[0], dict):
+                    video_url = output[0].get("video_url") or output[0].get("url") or _nested_url(output[0].get("video"))
+            # 兜底：顶层 video.url
+            if not video_url:
+                video_url = _nested_url(data.get("video"))
+
+            if mapped == "completed":
+                logger.info("[AIService] Modelink 视频完成 task=%s video_url=%s", task_id, video_url)
 
             return {**data, "status": mapped, "video_url": video_url}
 

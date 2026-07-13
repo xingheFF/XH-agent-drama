@@ -126,24 +126,13 @@ class AIWorker:
         }
 
     async def _generate_video_mock(self, task: Task) -> Dict[str, Any]:
-        prompt = task.params.get("prompt", "")
-        total_steps = 15
-        for step in range(1, total_steps + 1):
-            await asyncio.sleep(1.5 + random.uniform(0.5, 1.0))
-            progress = int(step / total_steps * 100)
-            task.progress = progress
-            await self._report_progress(task.id, progress)
-
-        if random.random() < 0.1 and task.retry_count == 0:
-            raise RuntimeError("GPU out of memory")
-
-        return {
-            "type": "video",
-            "url": f"/static/generated/{task.id}.mp4",
-            "thumbnail_url": f"/static/generated/{task.id}_thumb.png",
-            "prompt": prompt,
-            "duration": random.randint(3, 10),
-        }
+        """Mock 模式已禁用：直接报错，避免返回不存在的 URL 导致 404。"""
+        model = task.params.get("model") or "unknown"
+        logger.error("[AIWorker] 视频生成 Mock 模式已禁用 task=%s model=%s（API Key 未配置）", task.id, model)
+        raise RuntimeError(
+            f"视频模型 {model} 的 API Key 未配置，无法生成视频。"
+            "请在 .env 中配置对应的 API Key（如 MODELINK_API_KEY / DASHSCOPE_API_KEY / VOLCENGINE_ARK_API_KEY）。"
+        )
 
     async def _generate_script_mock(self, task: Task) -> Dict[str, Any]:
         prompt = task.params.get("prompt", "")
@@ -427,10 +416,12 @@ class AIWorker:
         task.progress = 5
         await self._report_progress(task.id, 5)
 
+        logger.info("[AIWorker] 开始调用视频生成 API task=%s model=%s", task.id, model)
         result = await AIService.generate_video(prompt, model=model, options=options)
         if not isinstance(result, dict):
             raise RuntimeError(f"视频生成返回异常：{result}")
 
+        logger.info("[AIWorker] 视频生成 API 返回 task=%s keys=%s", task.id, list(result.keys()))
         video_task_id = result.get("taskId")
         video_url = result.get("url") or result.get("video_url")
 
@@ -759,8 +750,14 @@ class AIWorker:
                 or ("wan" in model and _has_real_key(settings.DASHSCOPE_API_KEY))
                 or (model in {"viduq3-turbo", "vidu-q3-turbo"} and _has_real_key(settings.MODELINK_API_KEY))
             )
+            logger.info("[AIWorker] 视频生成 task=%s model=%s provider_ready=%s", task.id, model, provider_ready)
             if provider_ready:
-                return await self._generate_video_ai(task)
+                try:
+                    return await self._generate_video_ai(task)
+                except Exception as exc:
+                    import traceback
+                    logger.error("[AIWorker] 视频生成失败 task=%s model=%s err=%s\n%s", task.id, model, repr(exc), traceback.format_exc())
+                    raise RuntimeError(f"视频生成失败：{exc}") from exc
             return await self._generate_video_mock(task)
 
         elif task_type == "generate_script":
