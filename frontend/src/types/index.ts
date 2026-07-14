@@ -68,8 +68,27 @@ export interface CanvasListItem {
   id: string;
   name: string;
   description?: string;
+  team_id?: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface TeamMember {
+  id: string;
+  user_id: string;
+  username?: string | null;
+  role: 'owner' | 'admin' | 'member';
+  joined_at: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  team_code: string;
+  owner_id: string;
+  created_at: string;
+  updated_at: string;
+  members?: TeamMember[];
 }
 
 export interface TaskInfo {
@@ -85,15 +104,43 @@ export interface TaskInfo {
 }
 
 export interface WSMessage {
-  type: 'connected' | 'task_update' | 'node_status' | 'ping';
+  type:
+    | 'connected'
+    | 'task_update'
+    | 'node_status'
+    | 'ping'
+    | 'cursor_move'
+    | 'node_add'
+    | 'node_update'
+    | 'node_delete'
+    | 'edge_add'
+    | 'edge_update'
+    | 'edge_delete'
+    | 'node_positions'
+    | 'user_joined'
+    | 'user_left'
+    | 'presence';
   task_id?: string;
   node_id?: string;
+  edge_id?: string;
   canvas_id?: string;
   status?: string;
   progress?: number;
   result?: Record<string, unknown>;
   error?: string;
   message?: string;
+  x?: number;
+  y?: number;
+  user_id?: string;
+  username?: string;
+  color?: string;
+  by_user_id?: string;
+  by_username?: string;
+  node?: CanvasNode;
+  edge?: CanvasEdge;
+  data?: Partial<CanvasNode> | Partial<CanvasEdge>;
+  positions?: { id: string; x: number; y: number }[];
+  users?: { user_id: string; username?: string; color?: string }[];
 }
 
 // Agent workflow types
@@ -229,6 +276,8 @@ export interface Asset {
   name: string;
   asset_type: 'image' | 'video' | 'audio' | 'character' | 'scene' | 'other';
   canvas_id?: string;
+  team_id?: string;
+  user_id?: string;
   file_url: string;
   thumbnail_url?: string;
   description?: string;

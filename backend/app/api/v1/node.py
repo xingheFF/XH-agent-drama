@@ -11,7 +11,8 @@ from app.schemas.node import NodeCreate, NodeUpdate, NodeInDB, NodeAction
 from app.models.node import NodeStatus, NodeType
 from app.models.edge import Edge, EdgeType
 from app.models.user import User
-from app.api.deps import get_current_user, require_canvas_access
+from app.api.deps import get_current_user, require_canvas_access, require_canvas_edit
+from app.core.permissions import can_access_canvas, can_edit_canvas
 from app.services.credit_service import calculate_cost, deduct_credits, InsufficientCreditsError
 
 logger = logging.getLogger(__name__)
@@ -226,13 +227,18 @@ NODE_TYPE_TO_TASK = {
 }
 
 
-def _check_node_canvas_access(node, db: Session, current_user: User):
-    """校验节点所属画布的访问权限。"""
+def _check_node_canvas_permission(node, db: Session, current_user: User, require_edit: bool = False):
+    """校验节点所属画布的访问/编辑权限。"""
     canvas = crud_canvas.get_canvas(db, node.canvas_id)
     if not canvas:
         raise HTTPException(status_code=404, detail="画布不存在")
-    if canvas.user_id and str(canvas.user_id) != str(current_user.id):
-        raise HTTPException(status_code=403, detail="没有权限访问该节点")
+    user_id = str(current_user.id)
+    if require_edit:
+        if not can_edit_canvas(db, user_id, canvas):
+            raise HTTPException(status_code=403, detail="没有权限编辑该节点")
+    else:
+        if not can_access_canvas(db, user_id, canvas):
+            raise HTTPException(status_code=403, detail="没有权限访问该节点")
 
 
 @router.post("", response_model=NodeInDB, status_code=201)
@@ -244,8 +250,8 @@ def create_node(
     canvas = crud_canvas.get_canvas(db, node_in.canvas_id)
     if not canvas:
         raise HTTPException(status_code=404, detail="画布不存在")
-    if canvas.user_id and str(canvas.user_id) != str(current_user.id):
-        raise HTTPException(status_code=403, detail="没有权限访问该画布")
+    if not can_edit_canvas(db, str(current_user.id), canvas):
+        raise HTTPException(status_code=403, detail="没有权限编辑该画布")
     return crud_node.create_node(db, node_in)
 
 
@@ -258,7 +264,7 @@ def get_node(
     node = crud_node.get_node(db, node_id)
     if not node:
         raise HTTPException(status_code=404, detail="节点不存在")
-    _check_node_canvas_access(node, db, current_user)
+    _check_node_canvas_permission(node, db, current_user, require_edit=False)
     return node
 
 
@@ -281,7 +287,7 @@ def update_node(
     node = crud_node.get_node(db, node_id)
     if not node:
         raise HTTPException(status_code=404, detail="节点不存在")
-    _check_node_canvas_access(node, db, current_user)
+    _check_node_canvas_permission(node, db, current_user, require_edit=True)
     return crud_node.update_node(db, node, node_in)
 
 
@@ -294,9 +300,8 @@ def batch_update_positions(
     # 先校验所有节点权限
     node_ids = [UUID(p.get("id")) for p in positions if p.get("id")]
     nodes = db.query(crud_node.Node).filter(crud_node.Node.id.in_(node_ids)).all() if node_ids else []
-    node_map = {str(n.id): n for n in nodes}
     for node in nodes:
-        _check_node_canvas_access(node, db, current_user)
+        _check_node_canvas_permission(node, db, current_user, require_edit=True)
     count = crud_node.batch_update_positions(db, positions)
     return {"updated": count}
 
@@ -311,7 +316,7 @@ async def node_action(
     node = crud_node.get_node(db, node_id)
     if not node:
         raise HTTPException(status_code=404, detail="节点不存在")
-    _check_node_canvas_access(node, db, current_user)
+    _check_node_canvas_permission(node, db, current_user, require_edit=True)
 
     if action.action == "generate":
         if node.status == NodeStatus.PROCESSING:
