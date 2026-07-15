@@ -16,6 +16,7 @@ from app.skills.xyq_short_drama import XyqShortDramaSkill
 from app.skills.storyboard_director import StoryboardDirectorSkill
 from app.skills.script_video_prompt_architect import ScriptVideoPromptArchitectSkill
 from app.skills.novel_director import NovelDirectorSkill
+from app.skills.cultural_film import CulturalFilmSkill
 
 
 class SkillRegistry:
@@ -36,6 +37,7 @@ class SkillRegistry:
         self.register(StoryboardDirectorSkill())
         self.register(ScriptVideoPromptArchitectSkill())
         self.register(NovelDirectorSkill())
+        self.register(CulturalFilmSkill())
         # 旧版技能（保留向后兼容）
         self.register(StoryCreationSkill())
         self.register(ShotBreakdownSkill())
