@@ -1,0 +1,28 @@
+{
+  "novel_title": "",
+  "total_chapters": 0,
+  "current_chapter": 0,
+  "chapters": [
+    {
+      "chapter_number": 1,
+      "title": "",
+      "summary": "",
+      "keywords": [],
+      "characters_present": [],
+      "key_events": [],
+      "decision_points": [],
+      "cliffhanger": "",
+      "word_count": 0,
+      "status": "completed"
+    }
+  ],
+  "character_arc_progress": [
+    {
+      "name": "",
+      "current_state": "",
+      "evolution": ""
+    }
+  ],
+  "unresolved_threads": [],
+  "next_chapter_hints": []
+}

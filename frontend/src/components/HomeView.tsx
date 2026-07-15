@@ -42,6 +42,8 @@ const FEATURES = [
   { title: '分镜导演台本', skill_id: 'storyboard-director', desc: '小说自动拆解为专业分镜导演台本', icon: ClapperIcon, color: 'from-fuchsia-600 to-pink-700' },
   { title: '剧本视频提示词', skill_id: 'script-video-prompt-architect', desc: '剧本转Seedance 2.0视频生成提示词', icon: FileText, color: 'from-indigo-700 to-blue-800' },
   { title: 'AI小说导演板', skill_id: 'novel-director', desc: '互动小说创作·回合制导演板模式', icon: Feather, color: 'from-rose-600 to-orange-700' },
+  { title: '文旅宣传片工坊', skill_id: 'cultural-film-zh', desc: '剧本/灵感到成套影视级提示词一键生成', icon: MapPin, color: 'from-green-600 to-teal-700' },
+  { title: 'Seedance诊断修复', skill_id: 'seedance-troubleshoot-zh', desc: '视频生成失败诊断+提示词修复', icon: Wrench, color: 'from-orange-600 to-red-700' },
 ];
 
 const SCRIPT_TEMPLATES = [
@@ -160,6 +162,31 @@ const SKILL_TEMPLATES: SkillTemplate[] = [
       { name: '预计章节数', type: 'text', default: '10章', description: '预计完成的总章节数' },
       { name: '主角设定', type: 'text', required: true, description: '主角姓名和背景简介' },
       { name: '叙事模式', type: 'select', options: ['导演板模式（回合制互动演绎）', '一口气模式（AI连续演绎完整章节）'], default: '导演板模式（回合制互动演绎）' },
+    ],
+  },
+  {
+    skill_id: 'cultural-film-zh',
+    title: '文旅宣传片提示词工坊',
+    desc: '剧本/灵感到成套影视级提示词（导演→编剧→分镜→视频师四角色流水线）',
+    icon: MapPin,
+    params: [
+      { name: '目标时长', type: 'select', options: ['60秒', '90秒', '120秒', '180秒'], default: '90秒' },
+      { name: '画幅比例', type: 'select', options: ['9:16竖屏', '16:9横屏', '1:1方形'], default: '9:16竖屏' },
+      { name: '视觉风格', type: 'select', options: ['胶片质感,暖黄调,逆光,电影感', '清新明亮,自然光,日系治愈', '暗调低饱和,冷色,悬疑氛围', '高饱和浓郁,民族色彩,艳丽', '黑白水墨,留白,东方意境', '赛博朋克,霓虹,未来感'], default: '胶片质感,暖黄调,逆光,电影感' },
+      { name: '全片基调', type: 'text', default: '克制、留白、诗意', description: '全片情绪基调，2-4个词' },
+    ],
+  },
+  {
+    skill_id: 'seedance-troubleshoot-zh',
+    title: 'Seedance生成诊断修复',
+    desc: '视频生成结果不理想？粘贴提示词+描述问题，自动诊断根因并修复',
+    icon: Wrench,
+    params: [
+      { name: '故障症状', type: 'select', options: ['主体/人脸/产品变形或变化', '镜头跳跃/运镜混乱', '画面平庸/没有电影感', '动作被忽略/没有动起来', '唇形同步差/对白乱', '特效噪杂/不干净', '提示词被拦截/审核不通过', '视频延长质量下降', '音频引用被忽略', '文字/Logo变形', '续接不连贯/动作重复', '其他问题（自由描述）'], default: '主体/人脸/产品变形或变化' },
+      { name: '原始提示词', type: 'text', required: true, description: '你使用的那条Seedance提示词（完整粘贴）' },
+      { name: '问题描述', type: 'text', required: true, description: '详细描述生成结果的问题' },
+      { name: '生成模式', type: 'text', default: '', description: '使用的生成模式（T2V/I2V/V2V/R2V）和时长，如：I2V 10秒' },
+      { name: '素材说明', type: 'text', default: '', description: '使用的素材说明（几张图/视频/音频），无则留空' },
     ],
   },
 ];
@@ -508,6 +535,8 @@ export function HomeView({ onOpenAgent }: HomeViewProps) {
       : skill.icon === Video ? 'Video'
       : skill.icon === FileText ? 'FileText'
       : skill.icon === Feather ? 'Feather'
+      : skill.icon === MapPin ? 'MapPin'
+      : skill.icon === Wrench ? 'Wrench'
       : 'Sparkles';
     const skillDef: SkillDef = {
       skill_id: skill.skill_id,

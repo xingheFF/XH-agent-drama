@@ -46,7 +46,7 @@ export interface SkillDef {
 
 // ─── 图标映射 ────────────────────────────────────────
 
-import { BookOpen, Clapperboard, Video, Layers, Film, PenLine, Clapperboard as ClapperIcon, FileText, Feather } from 'lucide-react';
+import { BookOpen, Clapperboard, Video, Layers, Film, PenLine, Clapperboard as ClapperIcon, FileText, Feather, MapPin, Wrench } from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   BookOpen,
@@ -58,6 +58,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   ClapperIcon,
   FileText,
   Feather,
+  MapPin,
+  Wrench,
 };
 
 // 技能专属渐变色
@@ -71,6 +73,8 @@ const SKILL_GRADIENTS: Record<string, string> = {
   'storyboard-director': 'from-fuchsia-500 to-pink-600',
   'script-video-prompt-architect': 'from-indigo-600 to-blue-600',
   'novel-director': 'from-rose-600 to-orange-600',
+  'cultural-film-zh': 'from-green-600 to-teal-600',
+  'seedance-troubleshoot-zh': 'from-orange-500 to-red-600',
 };
 
 function getIcon(name: string): LucideIcon {

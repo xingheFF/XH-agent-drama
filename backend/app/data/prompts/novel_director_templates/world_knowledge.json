@@ -1,0 +1,39 @@
+{
+  "world_setting": {
+    "title": "",
+    "genre": "",
+    "premise": "",
+    "time_period": "",
+    "location": "",
+    "rules": []
+  },
+  "characters": [
+    {
+      "name": "",
+      "role": "protagonist",
+      "age": "",
+      "appearance": "",
+      "personality": "",
+      "background": "",
+      "motivation": "",
+      "arc": ""
+    }
+  ],
+  "key_locations": [
+    {
+      "name": "",
+      "description": "",
+      "significance": ""
+    }
+  ],
+  "timeline": [
+    {
+      "event": "",
+      "chapter": 1,
+      "description": ""
+    }
+  ],
+  "recurring_motifs": [],
+  "established_facts": [],
+  "unresolved_threads": []
+}
