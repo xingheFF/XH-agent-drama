@@ -221,8 +221,8 @@ _NODE_TYPE_TO_ASSET_TYPE = {
 }
 
 
-def _try_save_asset(db, node, result_url: str, thumbnail_url: str | None, result_type: str):
-    """节点生成成功后自动保存到资产库，关联到节点的画布。"""
+def _try_save_asset(db, node, result_url: str, thumbnail_url: str | None, result_type: str, user_id: str | None = None):
+    """节点生成成功后自动保存到资产库，关联到节点的画布和用户。"""
     try:
         # 避免重复保存：同一节点同一 url 不重复创建
         existing = db.query(Asset).filter(
@@ -231,6 +231,13 @@ def _try_save_asset(db, node, result_url: str, thumbnail_url: str | None, result
         ).first()
         if existing:
             return
+
+        # user_id 优先用传入的，否则从画布上获取
+        if not user_id:
+            from app.models.canvas import Canvas
+            canvas = db.query(Canvas).filter(Canvas.id == node.canvas_id).first()
+            if canvas and canvas.user_id:
+                user_id = canvas.user_id
 
         asset_type = _NODE_TYPE_TO_ASSET_TYPE.get(node.node_type, AssetType.IMAGE)
         cfg = node.config or {}
@@ -250,6 +257,7 @@ def _try_save_asset(db, node, result_url: str, thumbnail_url: str | None, result
             file_path=result_url,
             thumbnail_url=thumbnail_url or result_url,
             canvas_id=node.canvas_id,
+            user_id=user_id,
             tags=[node.node_type.value, "ai-generated"],
             description=node.prompt or "",
             meta=meta,
@@ -606,9 +614,9 @@ async def lifespan(app: FastAPI):
                         if variant_urls:
                             # 多图批量保存
                             for v_url in variant_urls:
-                                _try_save_asset(db, node, v_url, v_url, result_type)
+                                _try_save_asset(db, node, v_url, v_url, result_type, user_id=task.user_id)
                         else:
-                            _try_save_asset(db, node, result_url, thumbnail_url, result_type)
+                            _try_save_asset(db, node, result_url, thumbnail_url, result_type, user_id=task.user_id)
             elif task.status == TaskStatus.FAILED:
                 crud_node.update_node_status(
                     db, task.node_id, NodeStatus.FAILED,
