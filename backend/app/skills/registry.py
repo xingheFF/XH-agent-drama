@@ -11,6 +11,7 @@ from app.skills.storyboard_lite import StoryboardLiteSkill
 from app.skills.drama_generator_pro import DramaGeneratorProSkill
 from app.skills.muzi_generator import MuziGeneratorSkill
 from app.skills.seedance_prompt import SeedancePromptSkill
+from app.skills.seedance_troubleshoot import SeedanceTroubleshootSkill
 from app.skills.xyq_short_drama import XyqShortDramaSkill
 from app.skills.storyboard_director import StoryboardDirectorSkill
 from app.skills.script_video_prompt_architect import ScriptVideoPromptArchitectSkill
@@ -30,6 +31,7 @@ class SkillRegistry:
         self.register(DramaGeneratorProSkill())
         self.register(MuziGeneratorSkill())
         self.register(SeedancePromptSkill())
+        self.register(SeedanceTroubleshootSkill())
         self.register(XyqShortDramaSkill())
         self.register(StoryboardDirectorSkill())
         self.register(ScriptVideoPromptArchitectSkill())
