@@ -821,7 +821,7 @@ class PlatformBrainAgent:
                     ).order_by(SkillMessage.created_at.asc()).all()
                     if msgs:
                         history = [
-                            {"role": m.role, "content": m.content}
+                            {"role": m.role, "content": m.content, "raw_data": m.raw_data}
                             for m in msgs
                             if m.role in ("user", "assistant") and m.content
                         ]
