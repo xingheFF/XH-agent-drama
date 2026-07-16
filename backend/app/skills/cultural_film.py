@@ -642,10 +642,19 @@ shot_id 格式: {{场景号}}-{{镜头序号}}，如 S1-01。
 7. composition 用中文描述主体位置和视觉引导线
 8. anchors_used 必须引用视觉锚点中已有的 anchor_id
 
+【角色四维度携带要求（重要！）】
+每个 shot 的输出必须原样携带编剧提供的以下字段，不得遗漏或篡改：
+- dialogue: 原样复制编剧该镜头的 dialogue（台词列表，含speaker/text/emotion），无台词则为空数组 []
+- character_expression: 原样复制编剧该镜头的 character_expression（角色面部表情字典），无人物则为空对象 {{}}
+- character_action: 原样复制编剧该镜头的 character_action（角色肢体动作字典），无人物则为空对象 {{}}
+- character_emotion: 原样复制编剧该镜头的 character_emotion（角色内心情绪字典），无人物则为空对象 {{}}
+这些字段供下游视频师参考，必须完整保留。
+
 请为以上每个 shot 生成 ShotPrompt。
 每个 shot 包含: shot_id, desc_cn, image_prompt, negative_prompt,
 camera_params: {{shot_size, lens, angle, lighting, lighting_direction, color_grade, depth_of_field, film_stock_hint}},
-composition, composition_rules, anchors_used, reference_images, storyboard_note
+composition, composition_rules, anchors_used, reference_images, storyboard_note,
+dialogue, character_expression, character_action, character_emotion
 
 输出 JSON：
 {{"shots": [...]}}
@@ -687,6 +696,10 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
                         "anchors_used": [],
                         "reference_images": "",
                         "storyboard_note": "LLM 生成失败，使用降级提示词",
+                        "dialogue": s.get("dialogue", []),
+                        "character_expression": s.get("character_expression", {}),
+                        "character_action": s.get("character_action", {}),
+                        "character_emotion": s.get("character_emotion", {}),
                     })
 
         return {
@@ -711,6 +724,22 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
         emotional_arc = director_notes.get("emotional_arc", [])
         visual_style = director_notes.get("visual_style", "")
 
+        # 构建编剧镜头的 shot_id → 角色四维度映射
+        screenplay_shots_map: Dict[str, Dict[str, Any]] = {}
+        for sc in screenplay.get("scenes", []):
+            for s in sc.get("shots", []):
+                sid = s.get("shot_id", "")
+                if sid:
+                    screenplay_shots_map[sid] = {
+                        "shot_id": sid,
+                        "dialogue": s.get("dialogue", []),
+                        "character_expression": s.get("character_expression", {}),
+                        "character_action": s.get("character_action", {}),
+                        "character_emotion": s.get("character_emotion", {}),
+                        "desc": s.get("desc", ""),
+                        "duration": s.get("duration", 3),
+                    }
+
         # 按 scene_id 分组 shot_prompts
         sp_shots = shot_prompts.get("shots", [])
         shots_by_scene: Dict[str, list] = {}
@@ -723,7 +752,24 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
         all_video_shots: list[Dict[str, Any]] = []
 
         for scene_key, scene_shots in shots_by_scene.items():
-            scene_shots_json = json.dumps(scene_shots, ensure_ascii=False, indent=2)
+            # 合并分镜师画面提示词 + 编剧角色四维度数据
+            merged_shots: list[Dict[str, Any]] = []
+            for sb_shot in scene_shots:
+                sid = sb_shot.get("shot_id", "")
+                sp_data = screenplay_shots_map.get(sid, {})
+                merged = {**sb_shot}
+                # 确保四维度字段存在（优先用分镜师携带的，其次用编剧原始数据）
+                if not merged.get("dialogue"):
+                    merged["dialogue"] = sp_data.get("dialogue", [])
+                if not merged.get("character_expression"):
+                    merged["character_expression"] = sp_data.get("character_expression", {})
+                if not merged.get("character_action"):
+                    merged["character_action"] = sp_data.get("character_action", {})
+                if not merged.get("character_emotion"):
+                    merged["character_emotion"] = sp_data.get("character_emotion", {})
+                merged_shots.append(merged)
+
+            scene_shots_json = json.dumps(merged_shots, ensure_ascii=False, indent=2)
 
             batch_user_content = f"""\
 【导演手记（摘要）】
@@ -731,7 +777,8 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
 视觉风格: {visual_style}
 情绪曲线: {emotional_arc}
 
-【分镜师画面提示词（本场景）】
+【分镜师画面提示词 + 编剧角色数据（本场景）】
+每个 shot 包含分镜师的画面提示词（image_prompt/camera_params等）以及编剧的角色四维度数据（dialogue/character_expression/character_action/character_emotion）。
 {scene_shots_json}
 
 【视频模型能力表】
@@ -747,17 +794,24 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
 1. motion_prompt 用中文，公式：镜头动作+主体动作（含表情变化）+环境运动+时长秒+风格词
 2. motion_prompt 字数控制在30-80字，必须包含明确的运动方向和时长
 3. motion_params 各字段用中文（camera_move/camera_speed/subject_motion/expression_motion等）
-4. expression_motion 描述角色面部表情变化轨迹，若表情无变化则填"表情保持不变"
-5. 若该镜头有台词（dialogue非空），优先选择支持原生音频的模型并在 reason 中说明
-6. model_suggestion 的 reason 必须引用模型的 strengths 或 weaknesses 作为依据
-7. 优先推荐 seedance_2（全能型，支持原生音频），备选根据镜头类型选择
-8. 每个镜头必须有 risk_notes（风险预判）和 fallback_motion（兜底方案）
-9. 若分镜师画面中有"动起来会很怪"的元素，在 image_prompt_revision 中提出修订建议
+4. expression_motion 必须基于编剧 character_expression 和 character_emotion 描述角色面部表情变化轨迹。若角色有表情数据，必须具体描述表情如何变化（如"眉头从微蹙渐变为舒展，嘴角从抿紧到微微上扬"）；若表情无变化则填"表情保持不变"
+5. subject_motion_desc 必须基于编剧 character_action 描述角色肢体动作（如"右手撑伞沿巷道缓步前行，步伐沉重"），无人物动作则留空
+6. 若该镜头有台词（dialogue非空），motion_prompt 必须包含角色说话的动作描述（如"嘴唇微动轻声说话"），优先选择支持原生音频的模型并在 reason 中说明
+7. model_suggestion 的 reason 必须引用模型的 strengths 或 weaknesses 作为依据
+8. 优先推荐 seedance_2（全能型，支持原生音频），备选根据镜头类型选择
+9. 每个镜头必须有 risk_notes（风险预判）和 fallback_motion（兜底方案）
+10. 若分镜师画面中有"动起来会很怪"的元素，在 image_prompt_revision 中提出修订建议
+11. 输出中必须原样携带 dialogue, character_expression, character_action, character_emotion 字段
 
 请为以上每个 shot 输出 VideoShotPrompt。
+每个 shot 包含: shot_id, motion_prompt, motion_type,
+motion_params: {{camera_move, camera_speed, subject_motion, subject_motion_desc, expression_motion, environmental_motion, environmental_direction, particle_effect, duration}},
+model_suggestion: {{primary, reason, fallback, fallback_reason}},
+risk_notes, fallback_motion, image_prompt_revision, revised_image_prompt, videographer_note,
+dialogue, character_expression, character_action, character_emotion
 
 输出 JSON：
-{{"shots": [{{shot_id, motion_prompt, motion_type, motion_params: {{camera_move, camera_speed, subject_motion, subject_motion_desc, expression_motion, environmental_motion, environmental_direction, particle_effect, duration}}, model_suggestion: {{primary, reason, fallback, fallback_reason}}, risk_notes, fallback_motion, image_prompt_revision, revised_image_prompt, videographer_note}}]}}
+{{"shots": [...]}}
 
 只输出 JSON，不要输出任何其他文字。
 """
@@ -773,36 +827,61 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
             if batch_shots:
                 all_video_shots.extend(batch_shots)
             else:
-                # 降级：用规则生成简单的运动提示词
-                for shot in scene_shots:
+                # 降级：用规则生成简单的运动提示词，从编剧/分镜师补齐四维度
+                for shot in merged_shots:
                     sid = shot.get("shot_id", "")
                     cam = shot.get("camera_params", {})
+                    sp_data = screenplay_shots_map.get(sid, {})
+                    dialogue = shot.get("dialogue") or sp_data.get("dialogue", [])
+                    expr = shot.get("character_expression") or sp_data.get("character_expression", {})
+                    action = shot.get("character_action") or sp_data.get("character_action", {})
+                    emotion = shot.get("character_emotion") or sp_data.get("character_emotion", {})
+                    # 根据编剧数据生成更准确的降级描述
+                    expr_motion = "表情保持不变"
+                    if expr:
+                        expr_motion = "；".join(f"{k}：{v}" for k, v in expr.items())
+                    action_desc = ""
+                    if action:
+                        action_desc = "；".join(f"{k}：{v}" for k, v in action.items())
+                    has_dialogue = bool(dialogue)
+                    motion_type = "character_action" if (action or has_dialogue) else "camera_movement"
+                    duration = sp_data.get("duration", 3)
+                    motion_prefix = ""
+                    if action_desc:
+                        motion_prefix = f"{action_desc}，"
+                    if has_dialogue:
+                        speaker_texts = "；".join(f"{d.get('speaker', '')}说'{d.get('text', '')}'" for d in dialogue)
+                        motion_prefix += f"{speaker_texts}，嘴唇微动，"
                     all_video_shots.append({
                         "shot_id": sid,
-                        "motion_prompt": f"{cam.get('shot_size', '中景')}缓慢推进，3秒，{visual_style}，电影感运动流畅自然物理胶片质感",
-                        "motion_type": "camera_movement",
+                        "motion_prompt": f"{motion_prefix}{cam.get('shot_size', '中景')}缓慢推进，{duration}秒，{visual_style}，电影感运动流畅自然物理胶片质感",
+                        "motion_type": motion_type,
                         "motion_params": {
                             "camera_move": "推进",
                             "camera_speed": "慢",
-                            "subject_motion": "细微",
-                            "subject_motion_desc": "",
-                            "expression_motion": "表情保持不变",
+                            "subject_motion": "中等" if action else "细微",
+                            "subject_motion_desc": action_desc,
+                            "expression_motion": expr_motion,
                             "environmental_motion": [],
                             "environmental_direction": "",
                             "particle_effect": "",
-                            "duration": 3,
+                            "duration": duration,
                         },
                         "model_suggestion": {
                             "primary": "seedance_2",
-                            "reason": "Seedance 2.0为全能型模型，擅长镜头运动且支持原生音频",
+                            "reason": "Seedance 2.0为全能型模型，擅长镜头运动且支持原生音频" + ("，适合有台词镜头" if has_dialogue else ""),
                             "fallback": "kling_v1_5",
                             "fallback_reason": "可灵v1.5擅长环境氛围与长镜头，作为备选",
                         },
-                        "risk_notes": "低风险",
-                        "fallback_motion": "固定机位极慢速推进，3秒，电影感运动流畅自然物理胶片质感",
+                        "risk_notes": "低风险" if not has_dialogue else "台词口型同步可能不准，建议用近景弱化口型问题",
+                        "fallback_motion": f"固定机位极慢速推进，{duration}秒，电影感运动流畅自然物理胶片质感",
                         "image_prompt_revision": "",
                         "revised_image_prompt": "",
-                        "videographer_note": "LLM 生成失败，使用降级运动提示词",
+                        "videographer_note": "LLM 生成失败，使用降级运动提示词（已从编剧补齐角色数据）",
+                        "dialogue": dialogue,
+                        "character_expression": expr,
+                        "character_action": action,
+                        "character_emotion": emotion,
                     })
 
         return {
@@ -1045,6 +1124,25 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
             for shot in shots:
                 parts.append(f"\n#### {shot.get('shot_id', '')} 画面提示词\n")
                 parts.append(f"**中文描述**：{shot.get('desc_cn', '')}\n")
+                # 角色四维度
+                dialogue_list = shot.get("dialogue", [])
+                if dialogue_list:
+                    dialogue_str = "；".join(
+                        f"{d.get('speaker', '')}：\"{d.get('text', '')}\"（{d.get('emotion', '')}）" for d in dialogue_list
+                    )
+                    parts.append(f"**💬 台词**：{dialogue_str}\n")
+                expr_dict = shot.get("character_expression", {})
+                if expr_dict:
+                    expr_str = "；".join(f"{k}：{v}" for k, v in expr_dict.items())
+                    parts.append(f"**😊 表情**：{expr_str}\n")
+                action_dict = shot.get("character_action", {})
+                if action_dict:
+                    action_str = "；".join(f"{k}：{v}" for k, v in action_dict.items())
+                    parts.append(f"**🏃 动作**：{action_str}\n")
+                emo_dict = shot.get("character_emotion", {})
+                if emo_dict:
+                    emo_str = "、".join(emo_dict.values())
+                    parts.append(f"**💜 情绪**：{emo_str}\n")
                 parts.append(f"**image_prompt**：\n```\n{shot.get('image_prompt', '')}\n```\n")
                 parts.append(f"**negative_prompt**：\n```\n{shot.get('negative_prompt', '')}\n```\n")
                 cam = shot.get("camera_params", {})
@@ -1065,6 +1163,25 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
             vp_shots = vp.get("shots", [])
             for shot in vp_shots:
                 parts.append(f"\n#### {shot.get('shot_id', '')} 运动提示词\n")
+                # 角色四维度
+                dialogue_list = shot.get("dialogue", [])
+                if dialogue_list:
+                    dialogue_str = "；".join(
+                        f"{d.get('speaker', '')}：\"{d.get('text', '')}\"（{d.get('emotion', '')}）" for d in dialogue_list
+                    )
+                    parts.append(f"**💬 台词**：{dialogue_str}\n")
+                expr_dict = shot.get("character_expression", {})
+                if expr_dict:
+                    expr_str = "；".join(f"{k}：{v}" for k, v in expr_dict.items())
+                    parts.append(f"**😊 表情**：{expr_str}\n")
+                action_dict = shot.get("character_action", {})
+                if action_dict:
+                    action_str = "；".join(f"{k}：{v}" for k, v in action_dict.items())
+                    parts.append(f"**🏃 动作**：{action_str}\n")
+                emo_dict = shot.get("character_emotion", {})
+                if emo_dict:
+                    emo_str = "、".join(emo_dict.values())
+                    parts.append(f"**💜 情绪**：{emo_str}\n")
                 parts.append(f"**motion_prompt**：\n```\n{shot.get('motion_prompt', '')}\n```\n")
                 parts.append(f"**运动类型**：{shot.get('motion_type', '')}\n")
                 mp = shot.get("motion_params", {})
@@ -1074,6 +1191,8 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
                                  f"主体:{mp.get('subject_motion', '')} | "
                                  f"表情:{mp.get('expression_motion', '无')} | "
                                  f"{mp.get('duration', '')}s\n")
+                    if mp.get("subject_motion_desc"):
+                        parts.append(f"**动作描述**：{mp['subject_motion_desc']}\n")
                 ms = shot.get("model_suggestion", {})
                 if ms:
                     parts.append(f"**推荐模型**：{ms.get('primary', '')}（{ms.get('reason', '')}）\n")
@@ -1266,6 +1385,25 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
         for shot in shots:
             parts.append(f"\n### {shot.get('shot_id', '')} 画面提示词\n")
             parts.append(f"**中文描述**：{shot.get('desc_cn', '')}\n")
+            # 角色四维度
+            dialogue_list = shot.get("dialogue", [])
+            if dialogue_list:
+                dialogue_str = "；".join(
+                    f"{d.get('speaker', '')}：\"{d.get('text', '')}\"（{d.get('emotion', '')}）" for d in dialogue_list
+                )
+                parts.append(f"**💬 台词**：{dialogue_str}\n")
+            expr_dict = shot.get("character_expression", {})
+            if expr_dict:
+                expr_str = "；".join(f"{k}：{v}" for k, v in expr_dict.items())
+                parts.append(f"**😊 表情**：{expr_str}\n")
+            action_dict = shot.get("character_action", {})
+            if action_dict:
+                action_str = "；".join(f"{k}：{v}" for k, v in action_dict.items())
+                parts.append(f"**🏃 动作**：{action_str}\n")
+            emo_dict = shot.get("character_emotion", {})
+            if emo_dict:
+                emo_str = "、".join(emo_dict.values())
+                parts.append(f"**💜 情绪**：{emo_str}\n")
             parts.append(f"**image_prompt**：\n```\n{shot.get('image_prompt', '')}\n```\n")
             parts.append(f"**negative_prompt**：\n```\n{shot.get('negative_prompt', '')}\n```\n")
             cam = shot.get("camera_params", {})
@@ -1288,6 +1426,25 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
         vp_shots = vp.get("shots", [])
         for shot in vp_shots:
             parts.append(f"\n### {shot.get('shot_id', '')} 运动提示词\n")
+            # 角色四维度
+            dialogue_list = shot.get("dialogue", [])
+            if dialogue_list:
+                dialogue_str = "；".join(
+                    f"{d.get('speaker', '')}：\"{d.get('text', '')}\"（{d.get('emotion', '')}）" for d in dialogue_list
+                )
+                parts.append(f"**💬 台词**：{dialogue_str}\n")
+            expr_dict = shot.get("character_expression", {})
+            if expr_dict:
+                expr_str = "；".join(f"{k}：{v}" for k, v in expr_dict.items())
+                parts.append(f"**😊 表情**：{expr_str}\n")
+            action_dict = shot.get("character_action", {})
+            if action_dict:
+                action_str = "；".join(f"{k}：{v}" for k, v in action_dict.items())
+                parts.append(f"**🏃 动作**：{action_str}\n")
+            emo_dict = shot.get("character_emotion", {})
+            if emo_dict:
+                emo_str = "、".join(emo_dict.values())
+                parts.append(f"**💜 情绪**：{emo_str}\n")
             parts.append(f"**motion_prompt**：\n```\n{shot.get('motion_prompt', '')}\n```\n")
             parts.append(f"**运动类型**：{shot.get('motion_type', '')}\n")
             mp = shot.get("motion_params", {})
@@ -1297,6 +1454,8 @@ composition, composition_rules, anchors_used, reference_images, storyboard_note
                              f"主体:{mp.get('subject_motion', '')} | "
                              f"表情:{mp.get('expression_motion', '无')} | "
                              f"{mp.get('duration', '')}s\n")
+                if mp.get("subject_motion_desc"):
+                    parts.append(f"**动作描述**：{mp['subject_motion_desc']}\n")
             ms = shot.get("model_suggestion", {})
             if ms:
                 parts.append(f"**推荐模型**：{ms.get('primary', '')}（{ms.get('reason', '')}）\n")

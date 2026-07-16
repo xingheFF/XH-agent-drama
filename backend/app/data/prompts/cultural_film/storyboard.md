@@ -31,6 +31,12 @@
    - `anchors_used`：本镜头用到的 `anchor_id` 列表。
    - `reference_images`：若该镜头需img2img起手，标注参考图路径；否则留空。
    - `storyboard_note`：给视频师的备注。
+   - `dialogue`：原样携带编剧该镜头的 `dialogue` 字段（台词列表），不得遗漏。
+   - `character_expression`：原样携带编剧该镜头的 `character_expression` 字段（角色面部表情），不得遗漏。
+   - `character_action`：原样携带编剧该镜头的 `character_action` 字段（角色肢体动作），不得遗漏。
+   - `character_emotion`：原样携带编剧该镜头的 `character_emotion` 字段（角色内心情绪），不得遗漏。
+
+   **重要**：`dialogue`/`character_expression`/`character_action`/`character_emotion` 四个字段必须从编剧输入中原样复制到输出，供下游视频师参考。这是角色四维度数据的传递通道，遗漏会导致视频师无法生成表情运动和动作描述。
 
 ---
 
@@ -202,7 +208,11 @@
   "composition_rules": ["三分法", "引导线"],
   "anchors_used": ["char_001", "loc_001"],
   "reference_images": "",
-  "storyboard_note": "雨巷中景，注意雨滴和积水的质感表现；人物行走时伞面不要遮挡面部；表情为克制的疲惫，眉头微蹙是关键特征"
+  "storyboard_note": "雨巷中景，注意雨滴和积水的质感表现；人物行走时伞面不要遮挡面部；表情为克制的疲惫，眉头微蹙是关键特征",
+  "dialogue": [],
+  "character_expression": {"陈明": "眉头微蹙，眼神低垂，嘴角略抿"},
+  "character_action": {"陈明": "右手撑伞，左手插在口袋里，步伐沉重缓慢"},
+  "character_emotion": {"陈明": "怅惘"}
 }
 ```
 

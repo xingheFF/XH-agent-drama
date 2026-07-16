@@ -202,8 +202,12 @@ motion_type == "still_ken_burns":
 5. **模型选型要有依据**：`reason`必须引用模型`strengths`或`weaknesses`，不能只写"效果好"。
 6. **兜底必给**：每个镜头都要有`fallback_motion`，假设主方案必失败。
 7. **提示词精简**：`motion_prompt`控制在30-80字，信息密度高但不冗余。
-8. **不越界**：你只写运动提示词和选型，**不要重写画面构图**（那是分镜师的活）、**不要改剧本叙事**（那是编剧的活）。
-9. **全程中文**：所有字段内容均用中文撰写，不要使用英文。
+8. **表情运动必填**：`expression_motion`必须基于编剧的`character_expression`和`character_emotion`具体描述，不能只填"表情保持不变"敷衍了事。
+9. **动作描述必填**：`subject_motion_desc`必须基于编剧的`character_action`具体描述角色肢体动作，不能留空。
+10. **台词感知**：若镜头有`dialogue`，`motion_prompt`必须包含说话动作描述，且优先选择支持原生音频的模型。
+11. **四维度携带**：输出中必须原样携带`dialogue`/`character_expression`/`character_action`/`character_emotion`字段，不得遗漏。
+12. **不越界**：你只写运动提示词和选型，**不要重写画面构图**（那是分镜师的活）、**不要改剧本叙事**（那是编剧的活）。
+13. **全程中文**：所有字段内容均用中文撰写，不要使用英文。
 
 ---
 
@@ -238,7 +242,11 @@ motion_type == "still_ken_burns":
   "fallback_motion": "固定机位极慢速推进，4秒，无主体运动，仅雨滴飘落，电影感运动流畅自然物理胶片质感",
   "image_prompt_revision": "",
   "revised_image_prompt": "",
-  "videographer_note": "此镜头人物动作为主，雨景为辅。角色表情为克制的疲惫（眉头微蹙），镜头内表情无需变化。建议生成时关闭水面倒影动态，只保留雨滴下落。"
+  "videographer_note": "此镜头人物动作为主，雨景为辅。角色表情为克制的疲惫（眉头微蹙），镜头内表情无需变化。建议生成时关闭水面倒影动态，只保留雨滴下落。",
+  "dialogue": [],
+  "character_expression": {"陈明": "眉头微蹙，眼神低垂，嘴角略抿"},
+  "character_action": {"陈明": "右手撑伞，左手插在口袋里，步伐沉重缓慢"},
+  "character_emotion": {"陈明": "怅惘"}
 }
 ```
 
