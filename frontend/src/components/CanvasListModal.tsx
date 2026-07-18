@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Plus, Folder, Trash2, Users } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Plus, Folder, Trash2, Users, ChevronDown } from 'lucide-react';
 import { useEditorStore } from '@/store/editor';
 import { api } from '@/utils/api';
 import type { Team } from '@/types';
@@ -17,6 +17,10 @@ export function CanvasListModal({ isOpen, onClose }: Props) {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [createTeamId, setCreateTeamId] = useState<string | null>(null);
+  // 转移团队相关状态
+  const [transferId, setTransferId] = useState<string | null>(null);
+  const [transferring, setTransferring] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -24,11 +28,37 @@ export function CanvasListModal({ isOpen, onClose }: Props) {
       setNewName('');
       setDeletingId(null);
       setCreateTeamId(null);
+      setTransferId(null);
       api.listTeams()
         .then((res) => setTeams(res.teams || []))
         .catch(() => setTeams([]));
     }
   }, [isOpen, loadCanvasList]);
+
+  // 点击外部关闭转移下拉
+  useEffect(() => {
+    if (!transferId) return;
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setTransferId(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [transferId]);
+
+  const handleTransferTeam = async (canvasId: string, teamId: string | null) => {
+    setTransferring(true);
+    setTransferId(null);
+    try {
+      await api.updateCanvas(canvasId, { team_id: teamId });
+      await loadCanvasList(true);
+    } catch (err: any) {
+      alert(err?.message || '转移失败，请重试');
+    } finally {
+      setTransferring(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -60,6 +90,11 @@ export function CanvasListModal({ isOpen, onClose }: Props) {
     } finally {
       setDeletingId(null);
     }
+  };
+
+  const handleTransferClick = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setTransferId(transferId === id ? null : id);
   };
 
   const getTeamName = (teamId?: string) => {
@@ -145,6 +180,47 @@ export function CanvasListModal({ isOpen, onClose }: Props) {
                           </span>
                         )}
                       </div>
+                    </div>
+                    {/* 转移团队 */}
+                    <div className="relative" ref={transferId === c.id ? dropdownRef : undefined}>
+                      <button
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-theme-sub hover:text-accent hover:bg-accent/10 transition-all flex items-center gap-0.5"
+                        title="转移到团队"
+                        disabled={transferring && transferId === c.id}
+                        onClick={(e) => handleTransferClick(c.id, e)}
+                      >
+                        <Users size={14} />
+                        <ChevronDown size={10} />
+                      </button>
+                      {transferId === c.id && (
+                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[160px] glass rounded-xl border border-panel-border shadow-soft-lg py-1">
+                          <div className="px-3 py-1.5 text-[10px] text-theme-hint border-b border-panel-border mb-1">
+                            转移项目到...
+                          </div>
+                          <button
+                            className="w-full text-left px-3 py-1.5 text-xs hover:bg-panel-hover text-theme-main transition-colors"
+                            onClick={(e) => { e.stopPropagation(); handleTransferTeam(c.id, null); }}
+                          >
+                            <span className="text-theme-hint">●</span> 个人项目
+                            {!c.team_id && <span className="ml-1 text-[9px] text-success">当前</span>}
+                          </button>
+                          {teams.map((t) => (
+                            <button
+                              key={t.id}
+                              className="w-full text-left px-3 py-1.5 text-xs hover:bg-panel-hover text-theme-main transition-colors"
+                              onClick={(e) => { e.stopPropagation(); handleTransferTeam(c.id, t.id); }}
+                            >
+                              <span className="text-accent">●</span> {t.name}
+                              {c.team_id === t.id && <span className="ml-1 text-[9px] text-success">当前</span>}
+                            </button>
+                          ))}
+                          {teams.length === 0 && (
+                            <div className="px-3 py-2 text-[10px] text-theme-hint">
+                              还没有团队，先创建或加入一个团队吧
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <button
                       className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-theme-sub hover:text-error hover:bg-error/10 transition-all"

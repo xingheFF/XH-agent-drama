@@ -333,8 +333,10 @@ export const api = {
   getCanvas: (id: string) => request<Canvas>(`/canvases/${id}`),
   deleteCanvas: (id: string) =>
     request(`/canvases/${id}`, { method: 'DELETE' }),
-  updateCanvasName: (id: string, name: string) =>
-    request(`/canvases/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+updateCanvasName: (id: string, name: string) =>
+  request(`/canvases/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+updateCanvas: (id: string, data: { name?: string; description?: string; team_id?: string | null }) =>
+  request<CanvasListItem>(`/canvases/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
 
   createNode: (data: Partial<CanvasNode>) =>
     request<CanvasNode>('/nodes', { method: 'POST', body: JSON.stringify(data) }),

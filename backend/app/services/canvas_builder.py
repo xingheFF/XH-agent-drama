@@ -317,6 +317,10 @@ def build_canvas_from_session(
 
     def _add_edge(src_key: str, tgt_key: str, edge_type: EdgeType, label: str):
         if src_key not in node_id_map or tgt_key not in node_id_map:
+            logger.warning(
+                "[canvas_builder] 连线跳过：节点缺失 src_key=%s(exists=%s) tgt_key=%s(exists=%s) label=%s",
+                src_key, src_key in node_id_map, tgt_key, tgt_key in node_id_map, label,
+            )
             return
         src_id = node_id_map[src_key]
         tgt_id = node_id_map[tgt_key]
@@ -629,6 +633,10 @@ def sync_session_to_canvas(
 
     def _add_edge(src_key: str, tgt_key: str, edge_type: EdgeType, label: str):
         if src_key not in node_id_map or tgt_key not in node_id_map:
+            logger.warning(
+                "[canvas_builder] 连线跳过：节点缺失 src_key=%s(exists=%s) tgt_key=%s(exists=%s) label=%s",
+                src_key, src_key in node_id_map, tgt_key, tgt_key in node_id_map, label,
+            )
             return
         src_id = node_id_map[src_key]
         tgt_id = node_id_map[tgt_key]

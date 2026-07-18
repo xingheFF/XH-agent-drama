@@ -205,6 +205,24 @@ def _slim_screenwriter_data(sw_data: Optional[Dict[str, Any]]) -> Optional[Dict[
     }
 
 
+def _normalize_char_name(name: str) -> str:
+    """角色名归一化：去除括号注释、空格、标点，转小写，用于模糊匹配。
+
+    例：
+      "林萧（男主）" -> "林萧"
+      "林萧 " -> "林萧"
+      "Female Lead" -> "femalelead"
+    """
+    if not name:
+        return ""
+    import re
+    # 去除括号及其中内容（中英文括号）："林萧（男主）" -> "林萧"
+    s = re.sub(r"[（(].*?[）)]", "", name)
+    # 去除所有空白和标点符号
+    s = re.sub(r"[\s\W_]+", "", s, flags=re.UNICODE)
+    return s.lower()
+
+
 def _slim_storyboard_data(sb_data: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     """精简分镜数据，只保留场景/视频 Agent 需要的字段。"""
     if not sb_data or not isinstance(sb_data, dict):
@@ -2318,14 +2336,38 @@ class StoryboardDirectorAgent:
         # 角色索引：char_id -> 角色信息
         char_by_id = {}
         char_name_to_id = {}
+        # 归一化角色名 -> char_id 映射，用于容忍编剧输出中的标点/空格差异
+        _normalized_char_name_to_id = {}
         for c in character_data.get("characters", []):
             char_by_id[c.get("char_id")] = {
                 "char_id": c.get("char_id"),
                 "name": c.get("name"),
                 "immutable_features": c.get("immutable_features", []),
             }
-            if c.get("name"):
-                char_name_to_id[c.get("name")] = c.get("char_id")
+            raw_name = c.get("name")
+            if raw_name:
+                char_name_to_id[raw_name] = c.get("char_id")
+                norm = _normalize_char_name(raw_name)
+                if norm:
+                    _normalized_char_name_to_id[norm] = c.get("char_id")
+
+        def _resolve_char_id(raw: str) -> Optional[str]:
+            """角色名 -> char_id 的解析，先精确匹配，再归一化模糊匹配。"""
+            if not raw:
+                return None
+            cid = char_name_to_id.get(raw)
+            if cid:
+                return cid
+            norm = _normalize_char_name(raw)
+            if norm:
+                cid = _normalized_char_name_to_id.get(norm)
+                if cid:
+                    logger.warning(
+                        "[StoryboardDirector] 角色名模糊匹配成功: raw=%r -> char_id=%s (归一化=%r)",
+                        raw, cid, norm,
+                    )
+                    return cid
+            return None
 
         # 从编剧分场构建 scene_id -> 出场角色 char_id 列表 的映射
         # 只保留能在角色资产库中找到的角色，过滤掉非角色项
@@ -2333,6 +2375,7 @@ class StoryboardDirectorAgent:
                               "style", "bible", "storyboard", "script", "outline", "palette",
                               "tone", "theme", "narrator", "voiceover"}
         scene_characters_map = {}
+        _unmatched_char_names: List[str] = []
         if screenwriter_data:
             screenplay = screenwriter_data.get("screenplay", screenwriter_data)
             episodes = screenplay.get("episodes") if isinstance(screenplay, dict) else []
@@ -2342,20 +2385,29 @@ class StoryboardDirectorAgent:
                     chars = []
                     for c in sc.get("characters_involved", []):
                         if isinstance(c, dict):
-                            cid = c.get("char_id") or char_name_to_id.get(c.get("name", ""))
+                            cid = c.get("char_id") or _resolve_char_id(c.get("name", ""))
                             if cid:
                                 chars.append(cid)
+                            elif c.get("name"):
+                                _unmatched_char_names.append(c.get("name", ""))
                         elif isinstance(c, str):
                             # 过滤非角色项（如"分镜脚本"、"影片基调"等被误放入的项）
                             c_lower = c.strip().lower()
                             if any(kw in c_lower for kw in _non_char_keywords):
                                 continue
-                            cid = char_name_to_id.get(c)
+                            cid = _resolve_char_id(c)
                             if cid:
                                 chars.append(cid)
-                            # 未在角色库中找到的名称直接跳过，不作为 cid 使用
+                            else:
+                                _unmatched_char_names.append(c)
                     if sid:
                         scene_characters_map[sid] = chars
+        if _unmatched_char_names:
+            logger.warning(
+                "[StoryboardDirector] 编剧分场中以下角色名未能在角色库中匹配，"
+                "可能存在命名差异（导致 linked_char_ids 为空）：%s",
+                sorted(set(_unmatched_char_names)),
+            )
 
         slim_sw = _slim_screenwriter_data(screenwriter_data)
         screenwriter_section = (
@@ -2397,8 +2449,19 @@ class StoryboardDirectorAgent:
             sid = sb.get("linked_scene_id")
             allowed_chars = set(scene_characters_map.get(sid, []))
             current_chars = sb.get("linked_char_ids") or ([sb.get("linked_char_id")] if sb.get("linked_char_id") else [])
-            # 过滤掉不在 allowed_chars 中的角色，其余保持原样（包括空列表）
-            corrected = [c for c in current_chars if c in allowed_chars]
+            # 过滤掉不在 allowed_chars 中的角色；但若 allowed_chars 为空集（通常是角色名匹配失败
+            # 导致 scene_characters_map 缺失），则保留 LLM 原始输出，避免静默清空 linked_char_ids
+            # 导致画布角色→分镜连线丢失。
+            if allowed_chars:
+                corrected = [c for c in current_chars if c in allowed_chars]
+            else:
+                corrected = list(current_chars)
+                if corrected:
+                    logger.warning(
+                        "[StoryboardDirector] scene %s 的 allowed_chars 为空（角色名匹配失败），"
+                        "保留 LLM 原始 linked_char_ids=%s，未做过滤",
+                        sid, corrected,
+                    )
             if not corrected and allowed_chars:
                 # 编剧分场显示该场景有角色，但 LLM 没写 linked_char_ids：属于角色一致性错误，必须重写
                 validation_errors.append(
