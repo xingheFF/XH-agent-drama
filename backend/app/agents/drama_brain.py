@@ -2043,7 +2043,14 @@ def build_planning_graph() -> StateGraph:
     g.add_conditional_edges(
         "review_planning",
         route_after_review_planning,
-        {"screenwriter": "screenwriter", "character_designer": "__end__"},
+        # 注意：route_after_review_planning 可能返回 "script_planner"（LLM 服务异常
+        # 或大纲质量问题需重生成时），映射中必须包含该键，否则 LangGraph 抛出
+        # KeyError('script_planner')，导致「剧本创作失败: 'script_planner'」。
+        {
+            "script_planner": "script_planner",
+            "screenwriter": "screenwriter",
+            "character_designer": "__end__",
+        },
     )
     return g.compile()
 

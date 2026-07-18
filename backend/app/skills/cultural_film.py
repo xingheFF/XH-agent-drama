@@ -596,15 +596,110 @@ shot_id 格式: {{场景号}}-{{镜头序号}}，如 S1-01。
         global_negative_suffix = anchors_result.get("global_negative_suffix", "低分辨率，模糊，畸形，丑陋，文字，水印")
         anchors_json = json.dumps(visual_anchors, ensure_ascii=False, indent=2)
 
-        # ── 3b: 按场景分批生成镜头提示词 ──
-        all_shots: list[Dict[str, Any]] = []
+        # ── 3b-pre: 全局镜头流规划（让 LLM 先规划整片镜头节奏，再逐场景细化）──
         scenes = screenplay.get("scenes", [])
         key_motifs = director_notes.get("key_motifs", [])
+        emotional_arc = director_notes.get("emotional_arc", [])
 
-        for scene in scenes:
+        all_shot_ids: list[str] = []
+        scenes_shot_meta: list[Dict[str, Any]] = []
+        for sc in scenes:
+            for s in sc.get("shots", []):
+                sid = s.get("shot_id", "")
+                all_shot_ids.append(sid)
+                scenes_shot_meta.append({
+                    "shot_id": sid,
+                    "scene_id": s.get("scene_id", ""),
+                    "shot_type": s.get("shot_type", ""),
+                    "camera_move": s.get("camera_move", ""),
+                    "duration": s.get("duration", 0),
+                    "desc": s.get("desc", "")[:50],
+                    "transition_out": s.get("transition_out", ""),
+                })
+
+        flow_plan_content = f"""\
+【导演手记（摘要）】
+主题: {director_notes.get('theme', '')}
+视觉风格: {visual_style}
+基调: {director_notes.get('tone', '')}
+情绪曲线: {emotional_arc}
+
+【全片镜头清单（按时间顺序）】
+{json.dumps(scenes_shot_meta, ensure_ascii=False, indent=2)}
+
+【镜头流规划要求】
+请为整片规划镜头节奏流，确保镜头之间有视觉连续性和叙事逻辑。
+
+1. 景别节奏：遵循"开场大全景建立→中段中景/近景交替→结尾回归大全景留白"原则
+   - 相邻镜头景别不要重复（大全景后面不要接大全景，除非是跨场景建立镜头）
+   - 情绪高潮处用特写/近景，过渡处用中景，环境交代用全景/大全景
+2. 运镜衔接：相邻镜头运镜要有"呼吸感"
+   - 推进后面接固定或拉远（给观众"看完细节后喘口气"）
+   - 航拍后面接地面视角（从宏观到微观）
+   - 快速运动后面接慢速或固定（避免眩晕）
+3. 色调过渡：色调随情绪曲线变化
+   - 前段（铺垫）: 偏冷/偏暗，营造氛围
+   - 中段（冲突）: 对比增强，冷暖交替
+   - 后段（解决）: 偏暖/明亮，释放情绪
+4. 场景间衔接：跨场景的第一个镜头应该是新场景的建立镜头（大全景或全景），让观众知道换了地方
+5. 每个场景的最后一个镜头要为下一个场景做铺垫（视觉引导线指向画面外、角色视线朝向下一场景方向等）
+
+请输出每个 shot_id 的规划：
+{{"shot_flow_plan": [{{"shot_id": "...", "planned_shot_size": "...", "planned_camera_move": "...", "planned_color_grade": "...", "flow_note": "与上一镜头的衔接说明"}}]}}
+
+只输出 JSON，不要输出任何其他文字。
+"""
+        flow_plan_result = await llm_json(
+            system_prompt,
+            flow_plan_content,
+            model=self._llm_model,
+            max_tokens=4096,
+            temperature=0.4,
+            fallback={"shot_flow_plan": []},
+        )
+        shot_flow_plan = flow_plan_result.get("shot_flow_plan", [])
+        # 构建 shot_id → flow_plan 映射
+        flow_plan_map: Dict[str, Dict[str, Any]] = {
+            p.get("shot_id", ""): p for p in shot_flow_plan
+        }
+        flow_plan_json = json.dumps(shot_flow_plan, ensure_ascii=False, indent=2)
+
+        # ── 3b: 按场景分批生成镜头提示词（带跨场景衔接上下文）──
+        all_shots: list[Dict[str, Any]] = []
+        total_scenes = len(scenes)
+
+        for scene_idx, scene in enumerate(scenes):
             scene_shots = scene.get("shots", [])
             if not scene_shots:
                 continue
+
+            # 构建上下文：上一场景最后一个已生成的镜头
+            prev_scene_last_shot = None
+            if all_shots:
+                prev_scene_last_shot = {
+                    "shot_id": all_shots[-1].get("shot_id", ""),
+                    "shot_size": all_shots[-1].get("camera_params", {}).get("shot_size", ""),
+                    "image_prompt": all_shots[-1].get("image_prompt", "")[:100],
+                    "color_grade": all_shots[-1].get("camera_params", {}).get("color_grade", ""),
+                    "camera_move": all_shots[-1].get("camera_params", {}).get("shot_size", ""),
+                }
+
+            # 构建上下文：下一场景摘要
+            next_scene_summary = None
+            if scene_idx + 1 < total_scenes:
+                next_sc = scenes[scene_idx + 1]
+                next_scene_summary = {
+                    "scene_id": next_sc.get("scene_id", ""),
+                    "location": next_sc.get("location", ""),
+                    "time": next_sc.get("time", ""),
+                    "mood": next_sc.get("mood", ""),
+                    "action": next_sc.get("action", ""),
+                }
+
+            # 本场景的镜头流规划（只传本场景的）
+            scene_shot_ids = [s.get("shot_id", "") for s in scene_shots]
+            scene_flow_plan = [flow_plan_map.get(sid, {}) for sid in scene_shot_ids]
+            scene_flow_json = json.dumps(scene_flow_plan, ensure_ascii=False, indent=2)
 
             scene_summary = {
                 "scene_id": scene.get("scene_id", ""),
@@ -616,15 +711,38 @@ shot_id 格式: {{场景号}}-{{镜头序号}}，如 S1-01。
             }
             scene_json = json.dumps(scene_summary, ensure_ascii=False, indent=2)
 
+            prev_shot_json = json.dumps(prev_scene_last_shot, ensure_ascii=False, indent=2) if prev_scene_last_shot else "无（这是第一个场景）"
+            next_scene_json = json.dumps(next_scene_summary, ensure_ascii=False, indent=2) if next_scene_summary else "无（这是最后一个场景）"
+
             shots_user_content = f"""\
 【导演手记（摘要）】
 主题: {director_notes.get('theme', '')}
 视觉风格: {visual_style}
 基调: {director_notes.get('tone', '')}
+情绪曲线: {emotional_arc}
 关键意象: {key_motifs}
+
+【当前场景位置】第 {scene_idx + 1}/{total_scenes} 场
 
 【视觉锚点（已生成，请在 anchors_used 中引用对应 anchor_id）】
 {anchors_json}
+
+【本场景镜头流规划（已由全局规划生成，请遵循）】
+{scene_flow_json}
+- planned_shot_size: 建议景别，必须遵循
+- planned_camera_move: 建议运镜，必须遵循
+- planned_color_grade: 建议色调，必须遵循
+- flow_note: 与上一镜头的衔接说明，必须在画面中体现
+
+【上一场景最后一个镜头（衔接参考）】
+{prev_shot_json}
+- 本场景第一个镜头必须与上一场景最后一个镜头形成视觉衔接
+- 如果上一镜头是近景/特写，本场景应以大全景/全景建立新环境
+- 如果上一镜头色调偏冷，本场景色调过渡应自然变化，不要突变
+
+【下一场景摘要（预告参考）】
+{next_scene_json}
+- 本场景最后一个镜头应为下一场景做视觉铺垫（如角色视线朝向下一场景方向、画面留白引导等）
 
 【关键意象约束】
 - 导演要求的关键意象必须在至少一个镜头的 image_prompt 里被明确描述
@@ -639,8 +757,18 @@ shot_id 格式: {{场景号}}-{{镜头序号}}，如 S1-01。
 4. 当镜头有人物时，image_prompt 应包含编剧 character_action 中的关键肢体动作
 5. negative_prompt 用中文，包含本镜头特有风险+通用负向+一致性负向
 6. camera_params 各字段用中文（如 lens 用"50毫米"而非"50mm"）
-7. composition 用中文描述主体位置和视觉引导线
-8. anchors_used 必须引用视觉锚点中已有的 anchor_id
+7. camera_params.shot_size 必须等于镜头流规划中的 planned_shot_size
+8. camera_params 的 lighting/color_grade 必须与镜头流规划一致，且与上一场景末尾色调自然过渡
+9. composition 用中文描述主体位置和视觉引导线
+10. anchors_used 必须引用视觉锚点中已有的 anchor_id
+11. storyboard_note 必须说明本镜头与上一镜头的衔接关系（景别变化、运镜过渡、色调衔接等）
+
+【镜头衔接准则（重要！）】
+- 同场景内相邻镜头：景别要有变化（大全景→中景→特写，或特写→中景→全景），不要连续两个相同景别
+- 跨场景：新场景第一个镜头必须是建立镜头（大全景或全景），让观众知道换地方了
+- 运镜衔接：推进后接固定或拉远，快速运动后接慢速，避免连续两个快速运动
+- 色调过渡：色调随情绪曲线变化，相邻镜头色调差异不要太大，跨场景可渐变
+- 构图引导线：本场景最后一个镜头的构图引导线应指向画面外，暗示后续发展
 
 【角色四维度携带要求（重要！）】
 每个 shot 的输出必须原样携带编剧提供的以下字段，不得遗漏或篡改：
@@ -740,18 +868,25 @@ dialogue, character_expression, character_action, character_emotion
                         "duration": s.get("duration", 3),
                     }
 
-        # 按 scene_id 分组 shot_prompts
+        # 按 scene_id 分组 shot_prompts，保持场景顺序
         sp_shots = shot_prompts.get("shots", [])
         shots_by_scene: Dict[str, list] = {}
+        scene_order: list[str] = []
         for shot in sp_shots:
             sid = shot.get("shot_id", "")
             # shot_id 格式如 S1-01，提取场景号
             scene_key = sid.split("-")[0] if "-" in sid else sid
-            shots_by_scene.setdefault(scene_key, []).append(shot)
+            if scene_key not in shots_by_scene:
+                scene_order.append(scene_key)
+                shots_by_scene[scene_key] = []
+            shots_by_scene[scene_key].append(shot)
 
         all_video_shots: list[Dict[str, Any]] = []
+        total_scenes = len(scene_order)
 
-        for scene_key, scene_shots in shots_by_scene.items():
+        for scene_idx, scene_key in enumerate(scene_order):
+            scene_shots = shots_by_scene[scene_key]
+
             # 合并分镜师画面提示词 + 编剧角色四维度数据
             merged_shots: list[Dict[str, Any]] = []
             for sb_shot in scene_shots:
@@ -769,13 +904,55 @@ dialogue, character_expression, character_action, character_emotion
                     merged["character_emotion"] = sp_data.get("character_emotion", {})
                 merged_shots.append(merged)
 
+            # 构建上下文：上一场景最后一个已生成的视频镜头
+            prev_scene_last_video = None
+            if all_video_shots:
+                last_vs = all_video_shots[-1]
+                prev_scene_last_video = {
+                    "shot_id": last_vs.get("shot_id", ""),
+                    "motion_type": last_vs.get("motion_type", ""),
+                    "motion_prompt": last_vs.get("motion_prompt", "")[:80],
+                    "camera_move": last_vs.get("motion_params", {}).get("camera_move", ""),
+                    "camera_speed": last_vs.get("motion_params", {}).get("camera_speed", ""),
+                    "duration": last_vs.get("motion_params", {}).get("duration", 0),
+                }
+
+            # 构建上下文：下一场景的首镜头信息
+            next_scene_first_shot = None
+            if scene_idx + 1 < total_scenes:
+                next_scene_key = scene_order[scene_idx + 1]
+                next_shots = shots_by_scene.get(next_scene_key, [])
+                if next_shots:
+                    ns = next_shots[0]
+                    next_scene_first_shot = {
+                        "shot_id": ns.get("shot_id", ""),
+                        "desc_cn": ns.get("desc_cn", "")[:60],
+                        "shot_size": ns.get("camera_params", {}).get("shot_size", ""),
+                    }
+
             scene_shots_json = json.dumps(merged_shots, ensure_ascii=False, indent=2)
+            prev_video_json = json.dumps(prev_scene_last_video, ensure_ascii=False, indent=2) if prev_scene_last_video else "无（这是第一个场景）"
+            next_shot_json = json.dumps(next_scene_first_shot, ensure_ascii=False, indent=2) if next_scene_first_shot else "无（这是最后一个场景）"
 
             batch_user_content = f"""\
 【导演手记（摘要）】
 主题: {director_notes.get('theme', '')}
 视觉风格: {visual_style}
 情绪曲线: {emotional_arc}
+
+【当前场景位置】第 {scene_idx + 1}/{total_scenes} 场
+
+【上一场景最后一个镜头的运动（衔接参考）】
+{prev_video_json}
+- 本场景第一个镜头的运动必须与上一场景最后一个镜头形成衔接
+- 如果上一镜头是快速推进，本场景应以固定或缓慢拉远开场（给观众喘息空间）
+- 如果上一镜头是航拍，本场景应从地面视角开始（从宏观到微观）
+- 运动速度过渡要自然，不要从极慢突变到极快
+
+【下一场景第一个镜头（预告参考）】
+{next_shot_json}
+- 本场景最后一个镜头应为下一场景做运动铺垫
+- 如下一场景是动作场景，本场景末尾可加速；如下一场景是静态空镜，本场景末尾应减速
 
 【分镜师画面提示词 + 编剧角色数据（本场景）】
 每个 shot 包含分镜师的画面提示词（image_prompt/camera_params等）以及编剧的角色四维度数据（dialogue/character_expression/character_action/character_emotion）。
@@ -802,6 +979,15 @@ dialogue, character_expression, character_action, character_emotion
 9. 每个镜头必须有 risk_notes（风险预判）和 fallback_motion（兜底方案）
 10. 若分镜师画面中有"动起来会很怪"的元素，在 image_prompt_revision 中提出修订建议
 11. 输出中必须原样携带 dialogue, character_expression, character_action, character_emotion 字段
+12. videographer_note 必须说明本镜头与上一镜头的运动衔接关系（速度过渡、方向变化、运动类型切换等）
+
+【运动衔接准则（重要！）】
+- 同场景内相邻镜头：运动要有"呼吸感"，推进后接固定或拉远，快速后接慢速
+- 跨场景：新场景第一个镜头的运动应与上一场景末尾形成对比或过渡（如上一场景末尾是急推，新场景以固定空镜开场）
+- 运动速度曲线：整片速度应是 慢→中→快→慢 的弧线，对应情绪曲线（前段慢、中段快、结尾慢）
+- 运动类型分布：前段多 camera_movement + environment_atmosphere，中段多 character_action，结尾回归 environment_atmosphere
+- 避免连续两个镜头都是快速运动（会让观众眩晕）
+- 避免连续两个镜头都是同方向运动（如连续两个都是"从左到右"）
 
 请为以上每个 shot 输出 VideoShotPrompt。
 每个 shot 包含: shot_id, motion_prompt, motion_type,
