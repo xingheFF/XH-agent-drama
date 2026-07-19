@@ -435,6 +435,437 @@ function GeometryPrimitiveModel({
     );
   }
 
+  // 家具类组合几何体（统一着色，底部贴 y=0）
+  if (geometryType === "chair") {
+    return (
+      <group name="geometry-chair">
+        <mesh position={[0, 0.46, 0]}>
+          <boxGeometry args={[0.9, 0.08, 0.9]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.725, -0.41]}>
+          <boxGeometry args={[0.9, 0.45, 0.08]} />
+          {material}
+        </mesh>
+        {(
+          [
+            [-0.41, -0.41],
+            [0.41, -0.41],
+            [-0.41, 0.41],
+            [0.41, 0.41],
+          ] as const
+        ).map(([x, z], index) => (
+          <mesh key={index} position={[x, 0.21, z]}>
+            <boxGeometry args={[0.08, 0.42, 0.08]} />
+            {material}
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  if (geometryType === "stool") {
+    return (
+      <group name="geometry-stool">
+        <mesh position={[0, 0.46, 0]}>
+          <boxGeometry args={[0.8, 0.08, 0.8]} />
+          {material}
+        </mesh>
+        {(
+          [
+            [-0.36, -0.36],
+            [0.36, -0.36],
+            [-0.36, 0.36],
+            [0.36, 0.36],
+          ] as const
+        ).map(([x, z], index) => (
+          <mesh key={index} position={[x, 0.21, z]}>
+            <boxGeometry args={[0.08, 0.42, 0.08]} />
+            {material}
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  if (geometryType === "table") {
+    return (
+      <group name="geometry-table">
+        <mesh position={[0, 0.74, 0]}>
+          <boxGeometry args={[1.6, 0.08, 0.9]} />
+          {material}
+        </mesh>
+        {(
+          [
+            [-0.74, -0.4],
+            [0.74, -0.4],
+            [-0.74, 0.4],
+            [0.74, 0.4],
+          ] as const
+        ).map(([x, z], index) => (
+          <mesh key={index} position={[x, 0.35, z]}>
+            <boxGeometry args={[0.08, 0.7, 0.08]} />
+            {material}
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  if (geometryType === "coffee-table") {
+    return (
+      <group name="geometry-coffee-table">
+        <mesh position={[0, 0.4, 0]}>
+          <boxGeometry args={[1.2, 0.06, 0.7]} />
+          {material}
+        </mesh>
+        {(
+          [
+            [-0.55, -0.3],
+            [0.55, -0.3],
+            [-0.55, 0.3],
+            [0.55, 0.3],
+          ] as const
+        ).map(([x, z], index) => (
+          <mesh key={index} position={[x, 0.2, z]}>
+            <boxGeometry args={[0.06, 0.4, 0.06]} />
+            {material}
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  if (geometryType === "sofa") {
+    return (
+      <group name="geometry-sofa">
+        <mesh position={[0, 0.15, 0]}>
+          <boxGeometry args={[1.8, 0.3, 0.85]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.36, 0.075]}>
+          <boxGeometry args={[1.6, 0.12, 0.7]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.6, -0.335]}>
+          <boxGeometry args={[1.8, 0.45, 0.18]} />
+          {material}
+        </mesh>
+        <mesh position={[-0.81, 0.34, 0]}>
+          <boxGeometry args={[0.18, 0.38, 0.85]} />
+          {material}
+        </mesh>
+        <mesh position={[0.81, 0.34, 0]}>
+          <boxGeometry args={[0.18, 0.38, 0.85]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "bed") {
+    return (
+      <group name="geometry-bed">
+        <mesh position={[0, 0.125, 0]}>
+          <boxGeometry args={[2.0, 0.25, 1.5]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.32, 0]}>
+          <boxGeometry args={[1.9, 0.14, 1.4]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.4, -0.7]}>
+          <boxGeometry args={[2.0, 0.55, 0.1]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.265, 0.7]}>
+          <boxGeometry args={[2.0, 0.28, 0.1]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "cabinet") {
+    return (
+      <group name="geometry-cabinet">
+        <mesh position={[0, 0.9, 0]}>
+          <boxGeometry args={[1.0, 1.8, 0.4]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.6, 0]}>
+          <boxGeometry args={[1.0, 0.02, 0.4]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.2, 0]}>
+          <boxGeometry args={[1.0, 0.02, 0.4]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.82, 0]}>
+          <boxGeometry args={[1.1, 0.04, 0.5]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "door") {
+    return (
+      <group name="geometry-door">
+        <mesh position={[-0.55, 1.05, 0]}>
+          <boxGeometry args={[0.1, 2.1, 0.1]} />
+          {material}
+        </mesh>
+        <mesh position={[0.55, 1.05, 0]}>
+          <boxGeometry args={[0.1, 2.1, 0.1]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 2.05, 0]}>
+          <boxGeometry args={[1.2, 0.1, 0.1]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.0, 0.02]}>
+          <boxGeometry args={[1.0, 2.0, 0.04]} />
+          {material}
+        </mesh>
+        <mesh position={[0.42, 1.0, 0.08]}>
+          <sphereGeometry args={[0.03, 12, 8]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "window") {
+    return (
+      <group name="geometry-window">
+        <mesh position={[-0.75, 1.6, 0]}>
+          <boxGeometry args={[0.06, 1.2, 0.06]} />
+          {material}
+        </mesh>
+        <mesh position={[0.75, 1.6, 0]}>
+          <boxGeometry args={[0.06, 1.2, 0.06]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 2.2, 0]}>
+          <boxGeometry args={[1.56, 0.06, 0.06]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.0, 0]}>
+          <boxGeometry args={[1.56, 0.06, 0.06]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.6, 0]}>
+          <boxGeometry args={[1.5, 0.04, 0.04]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.6, 0]}>
+          <boxGeometry args={[0.04, 1.2, 0.04]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "stairs") {
+    return (
+      <group name="geometry-stairs">
+        {(
+          [
+            [-0.6, 0.2, 0.1],
+            [-0.3, 0.4, 0.2],
+            [0, 0.6, 0.3],
+            [0.3, 0.8, 0.4],
+            [0.6, 1.0, 0.5],
+          ] as const
+        ).map(([x, height, centerY], index) => (
+          <mesh key={index} position={[x, centerY, 0]}>
+            <boxGeometry args={[0.3, height, 1.0]} />
+            {material}
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  if (geometryType === "wall") {
+    return (
+      <group name="geometry-wall">
+        <mesh position={[0, 1.25, 0]}>
+          <boxGeometry args={[3.0, 2.5, 0.1]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  // 道具类组合几何体
+  if (geometryType === "streetlight") {
+    return (
+      <group name="geometry-streetlight">
+        <mesh position={[0, 0.04, 0]}>
+          <cylinderGeometry args={[0.1, 0.1, 0.08, 16]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.25, 0]}>
+          <cylinderGeometry args={[0.05, 0.05, 2.5, 16]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 2.55, 0]}>
+          <coneGeometry args={[0.18, 0.25, 16]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 2.5, 0]}>
+          <sphereGeometry args={[0.06, 16, 12]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "cup") {
+    return (
+      <group name="geometry-cup">
+        <mesh position={[0, 0.06, 0]}>
+          <cylinderGeometry args={[0.055, 0.05, 0.12, 24]} />
+          {material}
+        </mesh>
+        <mesh position={[0.075, 0.06, 0]} rotation={[0, Math.PI / 2, 0]}>
+          <torusGeometry args={[0.04, 0.008, 8, 24]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "bottle") {
+    return (
+      <group name="geometry-bottle">
+        <mesh position={[0, 0.11, 0]}>
+          <cylinderGeometry args={[0.07, 0.07, 0.22, 24]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.25, 0]}>
+          <cylinderGeometry args={[0.025, 0.07, 0.06, 24]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.3, 0]}>
+          <cylinderGeometry args={[0.025, 0.025, 0.06, 16]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.34, 0]}>
+          <cylinderGeometry args={[0.03, 0.03, 0.02, 16]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "book") {
+    return (
+      <group name="geometry-book">
+        <mesh position={[0, 0.02, 0]}>
+          <boxGeometry args={[0.22, 0.04, 0.15]} />
+          {material}
+        </mesh>
+        <mesh position={[-0.1, 0.025, 0]}>
+          <boxGeometry args={[0.02, 0.05, 0.16]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "umbrella") {
+    return (
+      <group name="geometry-umbrella">
+        <mesh position={[0, 0.02, 0]}>
+          <sphereGeometry args={[0.04, 12, 8]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.5, 0]}>
+          <cylinderGeometry args={[0.02, 0.02, 1.0, 12]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.2, 0]}>
+          <coneGeometry args={[0.45, 0.35, 12]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.425, 0]}>
+          <coneGeometry args={[0.04, 0.1, 12]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "potted-plant") {
+    return (
+      <group name="geometry-potted-plant">
+        <mesh position={[0, 0.1, 0]}>
+          <cylinderGeometry args={[0.14, 0.1, 0.2, 16]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.21, 0]}>
+          <cylinderGeometry args={[0.13, 0.13, 0.02, 16]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.4, 0]}>
+          <sphereGeometry args={[0.16, 12, 10]} />
+          {material}
+        </mesh>
+        <mesh position={[-0.1, 0.5, -0.05]}>
+          <sphereGeometry args={[0.1, 12, 10]} />
+          {material}
+        </mesh>
+        <mesh position={[0.1, 0.5, 0.05]}>
+          <sphereGeometry args={[0.1, 12, 10]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "fence") {
+    return (
+      <group name="geometry-fence">
+        {[-0.45, -0.15, 0.15, 0.45].map((x, index) => (
+          <mesh key={index} position={[x, 0.4, 0]}>
+            <boxGeometry args={[0.05, 0.8, 0.05]} />
+            {material}
+          </mesh>
+        ))}
+        <mesh position={[0, 0.25, 0]}>
+          <boxGeometry args={[1.0, 0.04, 0.03]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.6, 0]}>
+          <boxGeometry args={[1.0, 0.04, 0.03]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
+  if (geometryType === "signboard") {
+    return (
+      <group name="geometry-signboard">
+        <mesh position={[0, 0.02, 0]}>
+          <cylinderGeometry args={[0.1, 0.1, 0.04, 16]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 0.75, 0]}>
+          <cylinderGeometry args={[0.04, 0.04, 1.5, 12]} />
+          {material}
+        </mesh>
+        <mesh position={[0, 1.6, 0]}>
+          <boxGeometry args={[0.6, 0.4, 0.04]} />
+          {material}
+        </mesh>
+      </group>
+    );
+  }
+
   return (
     <mesh name="geometry-box" position={[0, 0.5, 0]}>
       <boxGeometry args={[1, 1, 1]} />

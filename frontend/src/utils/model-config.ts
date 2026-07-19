@@ -25,6 +25,10 @@ const _DEFAULT_VIDEO_MODELS: ModelOption[] = [
   { id: 'wan2.7-i2v', label: '万相 2.7 I2V', provider: '阿里云百炼', type: 'video' },
   { id: 'wan2.7-r2v', label: '万相 2.7 R2V', provider: '阿里云百炼', type: 'video' },
   { id: 'viduq3-turbo', label: 'Vidu Q3 Turbo', provider: 'Modelink', type: 'video' },
+  // ToonFlow 中转平台视频模型（独立于火山方舟直连）
+  { id: 'toonflow-seedance-2-0', label: 'Seedance 2.0 (ToonFlow)', provider: 'ToonFlow', type: 'video' },
+  { id: 'toonflow-seedance-2-0-fast', label: 'Seedance 2.0 Fast (ToonFlow)', provider: 'ToonFlow', type: 'video' },
+  { id: 'toonflow-kling-v3-omni', label: 'Kling V3 Omni (ToonFlow)', provider: 'ToonFlow', type: 'video' },
 ];
 
 const _DEFAULT_AUDIO_MODELS: ModelOption[] = [
@@ -62,6 +66,10 @@ export const VIDEO_DURATION_OPTIONS: Record<string, number[]> = {
   'wan2.7-i2v': [3, 5, 8, 10, 15],
   'wan2.7-r2v': [3, 5, 8, 10],
   'viduq3-turbo': [3, 5, 8, 10, 16],
+  // ToonFlow: Seedance 2.0 支持 4-15秒；Kling-V3-Omni 支持 5/10/15秒
+  'toonflow-seedance-2-0': [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  'toonflow-seedance-2-0-fast': [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+  'toonflow-kling-v3-omni': [5, 10, 15],
 };
 
 // 视频模型按分辨率
@@ -73,6 +81,10 @@ export const VIDEO_RESOLUTION_OPTIONS: Record<string, string[]> = {
   'wan2.7-i2v': ['720P', '1080P'],
   'wan2.7-r2v': ['720P', '1080P'],
   'viduq3-turbo': ['540p', '720p', '1080p'],
+  // ToonFlow: Seedance 2.0 支持 480p/720p；Kling-V3-Omni 支持 720p/1080p
+  'toonflow-seedance-2-0': ['480p', '720p'],
+  'toonflow-seedance-2-0-fast': ['480p', '720p'],
+  'toonflow-kling-v3-omni': ['720p', '1080p'],
 };
 
 // 视频模型按比例（wan2.7-i2v 跟随首帧，不展示比例）
@@ -84,13 +96,21 @@ export const VIDEO_ASPECT_RATIO_OPTIONS: Record<string, string[]> = {
   'wan2.7-i2v': [],
   'wan2.7-r2v': ['16:9', '9:16', '1:1', '4:3', '3:4'],
   'viduq3-turbo': ['16:9', '9:16', '1:1', '4:3', '3:4'],
+  // ToonFlow: Seedance/Kling 均支持 16:9 和 9:16
+  'toonflow-seedance-2-0': ['16:9', '9:16'],
+  'toonflow-seedance-2-0-fast': ['16:9', '9:16'],
+  'toonflow-kling-v3-omni': ['16:9', '9:16'],
 };
 
-// 支持声音生成的视频模型（Seedance 2.0 系列 + Vidu Q3 Turbo）
+// 支持声音生成的视频模型（Seedance 2.0 系列 + Vidu Q3 Turbo + ToonFlow 系列）
 export const VIDEO_SOUND_SUPPORT = new Set<string>([
   'doubao-seedance-2-0-260128',
   'doubao-seedance-2-0-fast-260128',
   'viduq3-turbo',
+  // ToonFlow: Seedance 2.0/2.0 fast 支持 audio=optional；Kling-V3-Omni 支持 sound on/off
+  'toonflow-seedance-2-0',
+  'toonflow-seedance-2-0-fast',
+  'toonflow-kling-v3-omni',
 ]);
 
 // 支持 watermark 参数的视频模型
@@ -127,6 +147,10 @@ export function supportsVideoWatermark(model: string): boolean {
 // 支持首尾帧模式的视频模型
 export const VIDEO_START_END_SUPPORT = new Set<string>([
   'viduq3-turbo',
+  // ToonFlow: Seedance 2.0/2.0 fast 支持 startFrameOptional；Kling-V3-Omni 支持 startFrameOptional
+  'toonflow-seedance-2-0',
+  'toonflow-seedance-2-0-fast',
+  'toonflow-kling-v3-omni',
 ]);
 
 export function supportsStartEndFrame(model: string): boolean {

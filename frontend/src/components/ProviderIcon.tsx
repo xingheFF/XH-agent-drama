@@ -50,7 +50,7 @@ export function ProviderIcon({ provider, modelId, size = 14, className = '' }: P
     );
   }
 
-  if (key.includes('火山') || key.includes('doubao') || key.includes('seedance') || key.includes('seed')) {
+  if (key.includes('火山') || key.includes('doubao') || key.includes('seedance') || key.includes('seed') || mid.includes('seedance') || mid.includes('doubao')) {
     // Seedream 文生图模型使用豆包专属图标（渐变水滴形）
     if (mid.includes('seedream')) {
       return (
@@ -102,6 +102,22 @@ export function ProviderIcon({ provider, modelId, size = 14, className = '' }: P
         {/* Vidu 标志性播放按钮三角形 */}
         <circle cx="12" cy="12" r="10" fill="url(#vidu-grad)"/>
         <path d="M10 8.5L16 12L10 15.5V8.5Z" fill="white"/>
+      </svg>
+    );
+  }
+
+  if (key.includes('kling') || mid.includes('kling')) {
+    // 可灵 (Kling) 图标 — 快手 AI 视频模型
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className={className} aria-hidden>
+        <defs>
+          <linearGradient id="kling-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#00D4AA"/>
+            <stop offset="100%" stopColor="#0099FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="12" cy="12" r="10" fill="url(#kling-grad)"/>
+        <path d="M9 7v10l8-5z" fill="white"/>
       </svg>
     );
   }

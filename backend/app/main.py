@@ -179,6 +179,10 @@ def _seed_model_configs(db: Session):
         ("wan2.7-i2v", "万相 I2V", "video", "阿里云万相图生视频模型", 100),
         ("wan2.7-r2v", "万相 R2V", "video", "阿里云万相参考视频模型", 100),
         ("viduq3-turbo", "Vidu Q3 Turbo", "video", "Modelink Vidu Q3 Turbo 视频生成模型（支持文生/图生/参考生/首尾帧）", 100),
+        # ToonFlow 中转平台视频模型（独立于火山方舟直连，走 ToonFlow 中转 API）
+        ("toonflow-seedance-2-0", "Seedance 2.0 (ToonFlow)", "video", "ToonFlow 中转 Seedance 2.0 视频模型（支持真人，文生/图生/首尾帧/多参考/音频生成）", 100),
+        ("toonflow-seedance-2-0-fast", "Seedance 2.0 Fast (ToonFlow)", "video", "ToonFlow 中转 Seedance 2.0 fast 快速版视频模型（支持真人，文生/图生/首尾帧/多参考/音频生成）", 80),
+        ("toonflow-kling-v3-omni", "Kling V3 Omni (ToonFlow)", "video", "ToonFlow 中转可灵 Kling V3 Omni 视频模型（文生/图生/首尾帧/多参考/声音生成）", 100),
         ("gpt-5.6-terra", "GPT-5.6 Terra", "llm", "OpenAI GPT-5.6 Terra 旗舰大模型", 0),
         ("gpt-5.6-luna", "GPT-5.6 Luna", "llm", "OpenAI GPT-5.6 Luna 旗舰大模型", 0),
     ]
@@ -469,13 +473,15 @@ async def lifespan(app: FastAPI):
     _api91_key_ok = bool(settings.API91_API_KEY) and "YOUR_" not in settings.API91_API_KEY
     _dashscope_key_ok = bool(settings.DASHSCOPE_API_KEY) and "YOUR_" not in settings.DASHSCOPE_API_KEY
     _modelink_key_ok = bool(settings.MODELINK_API_KEY) and "YOUR_" not in settings.MODELINK_API_KEY
+    _toonflow_key_ok = bool(settings.TOONFLOW_API_KEY) and "YOUR_" not in settings.TOONFLOW_API_KEY
     logger.info(
-        "[startup] LLM 配置: provider=%s model=%s | Ark key=%s (base=%s) | 91API key=%s (base=%s) | DashScope key=%s | Modelink key=%s (base=%s)",
+        "[startup] LLM 配置: provider=%s model=%s | Ark key=%s (base=%s) | 91API key=%s (base=%s) | DashScope key=%s | Modelink key=%s (base=%s) | ToonFlow key=%s (base=%s)",
         _llm_provider, _llm_model,
         "✓" if _ark_key_ok else "✗", settings.VOLCENGINE_ARK_API_BASE_URL,
         "✓" if _api91_key_ok else "✗", settings.API91_BASE_URL,
         "✓" if _dashscope_key_ok else "✗",
         "✓" if _modelink_key_ok else "✗", settings.MODELINK_API_BASE_URL,
+        "✓" if _toonflow_key_ok else "✗", settings.TOONFLOW_API_BASE_URL,
     )
     if _llm_provider == "api91" and not _api91_key_ok:
         logger.warning("[startup] ⚠ LLM_PROVIDER=api91 但 API91_API_KEY 未配置！LLM 调用将失败。")
@@ -883,6 +889,10 @@ def create_app() -> FastAPI:
             "VOLCENGINE_ARK_MODEL_ID_STANDARD": settings.VOLCENGINE_ARK_MODEL_ID_STANDARD,
             "VOLCENGINE_ARK_MODEL_ID_FAST": settings.VOLCENGINE_ARK_MODEL_ID_FAST,
             "DASHSCOPE_API_KEY (已配置)": bool(settings.DASHSCOPE_API_KEY and "YOUR_" not in settings.DASHSCOPE_API_KEY),
+            "TOONFLOW_API_BASE_URL": settings.TOONFLOW_API_BASE_URL,
+            "TOONFLOW_API_KEY (已配置)": bool(settings.TOONFLOW_API_KEY and "YOUR_" not in settings.TOONFLOW_API_KEY),
+            "TOONFLOW_API_KEY (前6位)": settings.TOONFLOW_API_KEY[:6] + "..." if settings.TOONFLOW_API_KEY else "(空)",
+            "TOONFLOW_MODELS": ["toonflow-seedance-2-0", "toonflow-seedance-2-0-fast", "toonflow-kling-v3-omni"],
             "uploads/videos 目录存在": os.path.isdir(os.path.join(uploads_dir, "videos")),
             "uploads/videos 文件数": len(os.listdir(os.path.join(uploads_dir, "videos"))) if os.path.isdir(os.path.join(uploads_dir, "videos")) else 0,
         }

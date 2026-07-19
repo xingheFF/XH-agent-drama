@@ -45,6 +45,12 @@ class Settings(BaseSettings):
     MODELINK_API_KEY: str = os.getenv("MODELINK_API_KEY", "")
     MODELINK_VIDEO_MODEL_ID: str = os.getenv("MODELINK_VIDEO_MODEL_ID") or "viduq3-turbo"
 
+    # ToonFlow 配置（ToonFlow 官方中转平台 - 可灵/Seedance 视频模型）
+    # 用于 Kling-V3-Omni、Seedance 2.0、Seedance 2.0 fast 等视频模型
+    # 获取地址：https://api.toonflow.net/
+    TOONFLOW_API_BASE_URL: str = os.getenv("TOONFLOW_API_BASE_URL") or "https://api.toonflow.net/v1"
+    TOONFLOW_API_KEY: str = os.getenv("TOONFLOW_API_KEY", "")
+
     # LLM 模型配置 — 不再从 .env 读取，全部硬编码安全默认值
     # .env 只负责 API 地址和密钥，模型选择由数据库管理 + 用户前端选择
     # 如果 .env 中写了旧值，会被忽略（废弃模型会被拦截）

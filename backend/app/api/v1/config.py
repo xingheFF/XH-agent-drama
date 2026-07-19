@@ -99,6 +99,10 @@ def get_runtime_models():
         settings.VOLCENGINE_ARK_MODEL_ID_STANDARD,
         settings.VOLCENGINE_ARK_MODEL_ID_FAST,
         settings.MODELINK_VIDEO_MODEL_ID,
+        # ToonFlow 中转平台视频模型（独立于火山方舟直连）
+        "toonflow-seedance-2-0",
+        "toonflow-seedance-2-0-fast",
+        "toonflow-kling-v3-omni",
     ]))
     video_ids = [m for m in video_ids if m and m.strip()]
     video_models = []
@@ -106,6 +110,8 @@ def get_runtime_models():
         m_lower = m.lower()
         if "vidu" in m_lower or m_lower in {"viduq3-turbo", "vidu-q3-turbo"}:
             provider = "Modelink"
+        elif m_lower.startswith("toonflow-"):
+            provider = "ToonFlow"
         else:
             provider = "火山方舟"
         video_models.append(

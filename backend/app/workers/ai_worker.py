@@ -177,14 +177,17 @@ class AIWorker:
 
         # 生成具体的缺失 key 提示
         _modelink_models = {"viduq3-turbo", "vidu-q3-turbo", settings.MODELINK_VIDEO_MODEL_ID.lower()}
+        _toonflow_models = {"toonflow-seedance-2-0", "toonflow-seedance-2-0-fast", "toonflow-kling-v3-omni"}
         if model in _modelink_models:
             missing_key = "MODELINK_API_KEY"
+        elif model in _toonflow_models:
+            missing_key = "TOONFLOW_API_KEY"
         elif model.startswith("doubao-seedance"):
             missing_key = "VOLCENGINE_ARK_API_KEY"
         elif "wan" in model:
             missing_key = "DASHSCOPE_API_KEY"
         else:
-            missing_key = "MODELINK_API_KEY / DASHSCOPE_API_KEY / VOLCENGINE_ARK_API_KEY"
+            missing_key = "MODELINK_API_KEY / DASHSCOPE_API_KEY / VOLCENGINE_ARK_API_KEY / TOONFLOW_API_KEY"
 
         raise RuntimeError(
             f"视频模型 {model} 的 API Key 未配置（{missing_key} 为空），无法生成视频。\n"
@@ -534,8 +537,8 @@ class AIWorker:
         if response_url:
             task.params["_response_url"] = response_url
             logger.info("[AIWorker] Modelink response_url=%s", response_url)
-        # Vidu Q3 Turbo / Seedance 2.0 高分辨率/长时长生成可能需要更久，给予 30 分钟；其他模型保持 15 分钟
-        is_long_poll = is_modelink or model.lower().startswith("doubao-seedance-2-0")
+        # Vidu Q3 Turbo / Seedance 2.0 / ToonFlow 高分辨率/长时长生成可能需要更久，给予 30 分钟；其他模型保持 15 分钟
+        is_long_poll = is_modelink or model.lower().startswith("doubao-seedance-2-0") or model.lower().startswith("toonflow-")
         poll_timeout = 1800 if is_long_poll else 900
         deadline = time.monotonic() + poll_timeout
         poll_interval = 10
@@ -829,10 +832,12 @@ class AIWorker:
             model = (task.params.get("model") or "wan2.7-video").lower()
             # 与 ai_service.py generate_video() 的路由判断保持一致
             _modelink_models = {"viduq3-turbo", "vidu-q3-turbo", settings.MODELINK_VIDEO_MODEL_ID.lower()}
+            _toonflow_models = {"toonflow-seedance-2-0", "toonflow-seedance-2-0-fast", "toonflow-kling-v3-omni"}
             provider_ready = (
                 (model.startswith("doubao-seedance") and _has_real_key(settings.VOLCENGINE_ARK_API_KEY))
                 or ("wan" in model and _has_real_key(settings.DASHSCOPE_API_KEY))
                 or (model in _modelink_models and _has_real_key(settings.MODELINK_API_KEY))
+                or (model in _toonflow_models and _has_real_key(settings.TOONFLOW_API_KEY))
             )
             logger.info("[AIWorker] 视频生成 task=%s model=%s provider_ready=%s", task.id, model, provider_ready)
             if provider_ready:

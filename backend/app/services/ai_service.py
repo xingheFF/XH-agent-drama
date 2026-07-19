@@ -349,6 +349,11 @@ class AIService:
             api_key = settings.MODELINK_API_KEY
             if _is_placeholder_key(api_key):
                 raise RuntimeError("请在 .env 中配置 MODELINK_API_KEY")
+        elif api_type == "toonflow":
+            base_url = settings.TOONFLOW_API_BASE_URL
+            api_key = settings.TOONFLOW_API_KEY
+            if _is_placeholder_key(api_key):
+                raise RuntimeError("请在 .env 中配置 TOONFLOW_API_KEY")
         else:
             raise ValueError(f"不支持的 API 类型: {api_type}")
 
@@ -1187,6 +1192,9 @@ class AIService:
             return await AIService._generate_video_wan27(prompt, model, options)
         if normalized in {"viduq3-turbo", "vidu-q3-turbo", settings.MODELINK_VIDEO_MODEL_ID.lower()}:
             return await AIService._generate_video_modelink(prompt, model, options)
+        # ToonFlow 中转平台：可灵/Seedance 系列（与火山方舟直连的 Seedance 分开路由）
+        if normalized.startswith("toonflow-"):
+            return await AIService._generate_video_toonflow(prompt, model, options)
 
         raise ValueError(f"不支持的视频模型: {model}")
 
@@ -1487,6 +1495,211 @@ class AIService:
             }
         return response
 
+    # ToonFlow 模型名称映射：内部模型 ID → ToonFlow API 模型名
+    _TOONFLOW_MODEL_MAP: Dict[str, str] = {
+        "toonflow-seedance-2-0": "Seedance 2.0",
+        "toonflow-seedance-2-0-fast": "Seedance 2.0 fast",
+        "toonflow-kling-v3-omni": "Kling-V3-Omni",
+    }
+
+    @staticmethod
+    async def _generate_video_toonflow(prompt: str, model: str, options: Dict[str, Any]) -> Any:
+        """调用 ToonFlow 中转平台 API 创建视频生成任务。
+
+        支持三个模型（独立于火山方舟直连，走 ToonFlow 中转）：
+          - toonflow-seedance-2-0      → "Seedance 2.0"（即梦 Seedance 2.0，支持真人）
+          - toonflow-seedance-2-0-fast → "Seedance 2.0 fast"（快速版）
+          - toonflow-kling-v3-omni     → "Kling-V3-Omni"（可灵 V3 Omni）
+
+        功能支持：
+          - 文生视频（无参考图）
+          - 单图生视频（1 张参考图）
+          - 首尾帧生视频（2 张参考图，标记为首帧/尾帧）
+          - 多参考生视频（3+ 张图片、视频参考、音频参考）
+          - 音频生成开关（Seedance: generate_audio；Kling: sound on/off）
+          - 分辨率/时长/宽高比控制
+
+        API 端点: POST /video/generateVideo
+        鉴权: Bearer TOONFLOW_API_KEY
+        任务ID路径: response.data
+        """
+        toonflow_model = AIService._TOONFLOW_MODEL_MAP.get(model.lower(), model)
+        lower_name = toonflow_model.lower()
+
+        # 提取参数
+        ar = _get_option(options, "aspect_ratio", "aspectRatio", "16:9")
+        duration = int(options.get("durationSec") or options.get("duration") or 5)
+        resolution = str(options.get("resolution") or "720p").strip().lower()
+        audio_opt = options.get("sound")
+        if audio_opt is None:
+            audio_opt = options.get("audio")
+
+        # 提取图片参考
+        refs_raw = options.get("reference_images") or []
+        image_refs_raw = [u for u in refs_raw if isinstance(u, str) and u.strip()]
+
+        # 兼容 camelCase (videoUrls) 和 snake_case (reference_video)
+        raw_video_urls = options.get("videoUrls") or options.get("reference_video") or []
+        if isinstance(raw_video_urls, str):
+            raw_video_urls = [raw_video_urls] if raw_video_urls.strip() else []
+        video_refs_raw = [u for u in raw_video_urls if isinstance(u, str) and u.strip()]
+
+        # 兼容 camelCase (audioUrl) 和 snake_case (reference_audio)
+        raw_audio_url = options.get("audioUrl") or options.get("reference_audio")
+        audio_ref_raw = raw_audio_url if isinstance(raw_audio_url, str) and raw_audio_url.strip() else None
+
+        # 转换图片为 base64 data URL（ToonFlow API 要求 base64 格式）
+        image_refs: List[str] = []
+        for u in image_refs_raw[:9]:
+            try:
+                data_url = await AIService._to_data_url(u)
+                image_refs.append(data_url)
+            except Exception as exc:
+                logger.warning("[AIService] ToonFlow 图片转 base64 失败: %s err=%s", u[:80], exc)
+
+        # 转换视频参考为公网 URL（视频文件过大不走 base64）
+        video_refs: List[str] = []
+        for u in video_refs_raw[:3]:
+            try:
+                pub_url = await _to_public_cos_url(u, "toonflow-video")
+                if pub_url and pub_url.startswith(("http://", "https://")):
+                    video_refs.append(pub_url)
+            except Exception as exc:
+                logger.warning("[AIService] ToonFlow 视频转 URL 失败: %s err=%s", u[:80], exc)
+
+        # 转换音频参考为公网 URL
+        audio_ref: Optional[str] = None
+        if audio_ref_raw:
+            try:
+                pub_url = await _to_public_cos_url(audio_ref_raw, "toonflow-audio")
+                if pub_url and pub_url.startswith(("http://", "https://")):
+                    audio_ref = pub_url
+            except Exception as exc:
+                logger.warning("[AIService] ToonFlow 音频转 URL 失败: %s err=%s", audio_ref_raw[:80], exc)
+
+        # 判断生成模式
+        has_multi_refs = len(image_refs) >= 3 or bool(video_refs) or bool(audio_ref)
+        is_start_end = len(image_refs) == 2
+
+        # 构建 metadata（按模型类型构建不同的请求体结构）
+        metadata: Dict[str, Any] = {}
+
+        if "kling" in lower_name:
+            # ── 可灵 Kling-V3-Omni 系列 ──
+            # metadata 结构: aspect_ratio, sound, video_list, image_list
+            metadata = {
+                "aspect_ratio": ar,
+                "sound": "on" if audio_opt else "off",
+                "video_list": [{"video_url": v} for v in video_refs],
+                "image_list": [],
+            }
+
+            if has_multi_refs:
+                # 多参考模式：image_list 只含 image_url
+                for img in image_refs:
+                    metadata["image_list"].append({"image_url": img})
+            elif is_start_end:
+                # 首尾帧模式：image_list 含 image_url + type
+                for i, img in enumerate(image_refs):
+                    metadata["image_list"].append({
+                        "image_url": img,
+                        "type": "first_frame" if i == 0 else "end_frame",
+                    })
+            elif image_refs:
+                # 单图模式
+                metadata["image_list"].append({"image_url": image_refs[0]})
+        else:
+            # ── Seedance 2.0 / Seedance 2.0 fast 系列（即梦） ──
+            # metadata 结构: ratio, references[], resolution, generate_audio
+            metadata = {
+                "ratio": ar,
+                "references": [],
+                "resolution": resolution,
+            }
+            if isinstance(audio_opt, bool):
+                metadata["generate_audio"] = audio_opt
+
+            if has_multi_refs:
+                # 多参考模式：references 含 role=reference_image/reference_video/reference_audio
+                for img in image_refs:
+                    metadata["references"].append({
+                        "role": "reference_image",
+                        "type": "image_url",
+                        "image_url": {"url": img},
+                    })
+                for v in video_refs:
+                    metadata["references"].append({
+                        "role": "reference_video",
+                        "type": "video_url",
+                        "video_url": {"url": v},
+                    })
+                if audio_ref:
+                    metadata["references"].append({
+                        "role": "reference_audio",
+                        "type": "audio_url",
+                        "audio_url": {"url": audio_ref},
+                    })
+            elif is_start_end:
+                # 首尾帧模式：role=first_frame / last_frame
+                for i, img in enumerate(image_refs):
+                    metadata["references"].append({
+                        "type": "image_url",
+                        "image_url": {"url": img},
+                        "role": "first_frame" if i == 0 else "last_frame",
+                    })
+            elif image_refs:
+                # 单图模式：role=reference_image
+                for img in image_refs:
+                    metadata["references"].append({
+                        "role": "reference_image",
+                        "type": "image_url",
+                        "image_url": {"url": img},
+                    })
+
+        # ── Seedance 2.0 专有 @ 语法：多参考图（>=3张）时在 prompt 前注入 [图N] 指代说明 ──
+        # 与火山方舟直连的 _generate_video_seedance 保持一致
+        # Kling 系列不需要 @ 语法
+        final_prompt = prompt
+        if "kling" not in lower_name and len(image_refs) >= 3:
+            has_figure_refs = "[图" in prompt
+            if not has_figure_refs:
+                final_prompt = (
+                    f"（共{len(image_refs)}张参考图，按上传顺序为[图1]至[图{len(image_refs)}]，"
+                    f"请在描述中用[图1][图2]等指代。）\n{prompt}"
+                )
+                logger.info("[AIService] ToonFlow Seedance 注入 @ 语法: %d 张参考图", len(image_refs))
+
+        # 公共请求体
+        body: Dict[str, Any] = {
+            "model": toonflow_model,
+            "prompt": final_prompt,
+            "duration": duration,
+            "resolution": resolution,
+            "metadata": metadata,
+        }
+
+        logger.info(
+            "[AIService] ToonFlow 视频任务 model=%s duration=%s res=%s ar=%s imgs=%d vids=%d audio=%s mode=%s",
+            toonflow_model, duration, resolution, ar, len(image_refs), len(video_refs),
+            bool(audio_ref), "multi" if has_multi_refs else ("start_end" if is_start_end else ("single" if image_refs else "text")),
+        )
+
+        response = await AIService._post("/video/generateVideo", body, "toonflow")
+
+        # 提取 taskId：ToonFlow 返回 { "data": "taskId字符串" }
+        task_id = None
+        if isinstance(response, dict):
+            task_id = response.get("data")
+            if isinstance(task_id, dict):
+                task_id = task_id.get("id") or task_id.get("task_id") or task_id.get("data")
+
+        if task_id:
+            logger.info("[AIService] ToonFlow 任务已提交 model=%s taskId=%s", toonflow_model, task_id)
+            return {"taskId": str(task_id), "status": "pending", **response}
+
+        logger.warning("[AIService] ToonFlow 未返回 taskId, response=%s", str(response)[:500])
+        return response
+
     # ------------------------------------------------------------------
     # Status Checks
     # ------------------------------------------------------------------
@@ -1600,6 +1813,65 @@ class AIService:
                 logger.info("[AIService] Modelink 视频完成 task=%s video_url=%s", task_id, video_url)
 
             return {**data, "status": mapped, "video_url": video_url}
+
+        # ToonFlow 中转平台状态查询：POST /video/getVideoStatus
+        if normalized.startswith("toonflow-"):
+            url = _join_url(settings.TOONFLOW_API_BASE_URL, "/video/getVideoStatus")
+            headers = {
+                "Authorization": f"Bearer {settings.TOONFLOW_API_KEY}",
+                "Content-Type": "application/json",
+            }
+            # 注意：ToonFlow API 使用 taskICode（大写 I），非 taskIcode
+            poll_body = {"taskICode": task_id}
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(url, json=poll_body, headers=headers, timeout=120)
+                    resp.raise_for_status()
+                    data = resp.json()
+            except Exception as exc:
+                logger.warning("[AIService] ToonFlow 状态查询失败 task=%s err=%s", task_id, exc)
+                return {"status": "processing"}
+
+            logger.info("[AIService] ToonFlow 状态响应 task=%s body=%s", task_id, json.dumps(data, ensure_ascii=False)[:1000])
+
+            # 状态可能在顶层 status 或 data.status
+            raw_status = str(
+                data.get("status")
+                or (data.get("data") or {}).get("status")
+                or ""
+            ).lower()
+
+            mapped = (
+                "completed" if raw_status in {"completed", "success", "succeeded"} else
+                "failed" if raw_status in {"failed", "failure", "error"} else
+                "processing"
+            )
+
+            # 视频URL在 data.data.data（成功时）
+            video_url = None
+            error_msg = None
+            data_block = data.get("data") or {}
+
+            if mapped == "completed":
+                if isinstance(data_block, dict):
+                    video_url = (
+                        data_block.get("data")
+                        or data_block.get("video_url")
+                        or data_block.get("url")
+                    )
+                    if isinstance(video_url, dict):
+                        video_url = video_url.get("url")
+                logger.info("[AIService] ToonFlow 视频完成 task=%s video_url=%s", task_id, video_url)
+            elif mapped == "failed":
+                # 错误原因在 data.failReason 或 data.data.failReason
+                error_msg = (
+                    data.get("failReason")
+                    or (data_block.get("failReason") if isinstance(data_block, dict) else None)
+                    or "视频生成失败"
+                )
+                logger.warning("[AIService] ToonFlow 视频失败 task=%s error=%s", task_id, error_msg)
+
+            return {**data, "status": mapped, "video_url": video_url, "error": error_msg}
 
     @staticmethod
     async def cancel_ark_task(task_id: str) -> Dict[str, Any]:
