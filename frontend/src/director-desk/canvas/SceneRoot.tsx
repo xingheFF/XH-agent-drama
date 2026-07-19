@@ -512,6 +512,32 @@ function GeometryPrimitiveModel({
     );
   }
 
+  if (geometryType === "conference-table") {
+    return (
+      <group name="geometry-conference-table">
+        <mesh position={[0, 0.74, 0]}>
+          <boxGeometry args={[3.2, 0.08, 1.2]} />
+          {material}
+        </mesh>
+        {(
+          [
+            [-1.48, -0.55],
+            [0, -0.55],
+            [1.48, -0.55],
+            [-1.48, 0.55],
+            [0, 0.55],
+            [1.48, 0.55],
+          ] as const
+        ).map(([x, z], index) => (
+          <mesh key={index} position={[x, 0.35, z]}>
+            <boxGeometry args={[0.08, 0.7, 0.08]} />
+            {material}
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
   if (geometryType === "coffee-table") {
     return (
       <group name="geometry-coffee-table">

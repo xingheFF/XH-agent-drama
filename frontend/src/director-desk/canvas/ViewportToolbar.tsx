@@ -677,7 +677,7 @@ export function ViewportToolbar({
       {geometryMenuOpen ? (
         <div
           ref={geometryMenuRef}
-          className="viewport-toolbar-submenu"
+          className="viewport-toolbar-submenu is-geometry-grid"
           role="menu"
           aria-label="选择几何模型"
           style={geometryMenuStyle}

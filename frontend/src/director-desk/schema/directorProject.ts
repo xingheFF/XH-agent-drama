@@ -11,6 +11,7 @@ export const GEOMETRY_PRIMITIVE_OPTIONS = [
   { type: "chair", label: "椅子" },
   { type: "stool", label: "凳子" },
   { type: "table", label: "桌子" },
+  { type: "conference-table", label: "会议长桌" },
   { type: "coffee-table", label: "茶几" },
   { type: "sofa", label: "沙发" },
   { type: "bed", label: "床" },

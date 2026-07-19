@@ -1880,6 +1880,24 @@ textarea:focus-visible {
   -webkit-backdrop-filter: blur(32px);
 }
 
+.viewport-toolbar-submenu.is-geometry-grid {
+  width: auto;
+  max-height: calc(100vh - 140px);
+  grid-template-columns: repeat(3, minmax(82px, 1fr));
+  gap: 4px 6px;
+  padding: 8px;
+  overflow-y: auto;
+}
+
+.viewport-toolbar-submenu.is-geometry-grid button {
+  width: 100%;
+  height: 32px;
+  padding: 0 6px;
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .viewport-toolbar-crowd-panel {
   position: absolute;
   z-index: 31;

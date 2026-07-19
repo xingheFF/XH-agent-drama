@@ -15,6 +15,7 @@ const GEOMETRY_FOCUS_OFFSET_Y: Record<GeometryPrimitiveType, number> = {
   chair: 0.5,
   stool: 0.25,
   table: 0.4,
+  "conference-table": 0.4,
   "coffee-table": 0.2,
   sofa: 0.4,
   bed: 0.35,
