@@ -255,6 +255,7 @@ loadRuntimeModels();
           prompt: `参考图片：${asset.name}`,
           result_url: imageUrl,
           thumbnail_url: thumbUrl,
+          status: 'success',
           // 只记录 asset_id 便于关联，不把自身图片写入 reference_images，
           // 避免生成时以自身为参考图
           config: { ...(newNode.config || {}), reference_asset_ids: [asset.id] },
@@ -270,6 +271,7 @@ loadRuntimeModels();
                         prompt: `参考图片：${asset.name}`,
                         result_url: imageUrl,
                         thumbnail_url: thumbUrl,
+                        status: 'success',
                         config: { ...(n.config || {}), reference_asset_ids: [asset.id] },
                       }
                     : n
@@ -301,6 +303,7 @@ loadRuntimeModels();
           prompt: `${asset.asset_type === 'video' ? '参考视频' : asset.asset_type === 'audio' ? '参考音频' : '参考图片'}：${asset.name}`,
           result_url: mediaUrl,
           thumbnail_url: thumbUrl,
+          status: 'success',
           config: { ...(newNode.config || {}), reference_asset_ids: [asset.id] },
         });
         useEditorStore.setState((s) => ({
@@ -314,6 +317,7 @@ loadRuntimeModels();
                         prompt: `${asset.asset_type === 'video' ? '参考视频' : asset.asset_type === 'audio' ? '参考音频' : '参考图片'}：${asset.name}`,
                         result_url: mediaUrl,
                         thumbnail_url: thumbUrl,
+                        status: 'success',
                         config: { ...(n.config || {}), reference_asset_ids: [asset.id] },
                       }
                     : n
