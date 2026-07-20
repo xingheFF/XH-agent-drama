@@ -8,11 +8,12 @@ import {
 import { useAuthStore } from '@/store/auth';
 
 const FEATURES = [
-  { title: '剧情故事创作', desc: 'AI 编剧一键生成短剧剧本与分镜提示词包', icon: Play },
-  { title: '拉片复刻', desc: '复刻经典镜头与叙事节奏，替换主体规避版权', icon: Clapperboard },
-  { title: '场景设计', desc: '文字直接生成电影级场景提示词', icon: Mountain },
-  { title: '我在世界杯现场', desc: '沉浸式赛事氛围视频生成', icon: Shirt },
-  { title: '无人机航拍', desc: '一键生成震撼航拍视角', icon: Plane },
+  { title: '剧情故事创作', desc: 'AI 编剧一键生成短剧剧本与分镜提示词包', icon: Play, color: 'from-blue-600 to-indigo-700' },
+  { title: '拉片复刻', desc: '复刻经典镜头与叙事节奏，替换主体规避版权', icon: Clapperboard, color: 'from-rose-600 to-orange-700' },
+  { title: '场景设计', desc: '文字直接生成电影级场景提示词', icon: Mountain, color: 'from-emerald-600 to-teal-700' },
+  { title: '我在世界杯现场', desc: '沉浸式赛事氛围视频生成', icon: Shirt, color: 'from-amber-500 to-red-600' },
+  { title: '无人机航拍', desc: '一键生成震撼航拍视角', icon: Plane, color: 'from-sky-500 to-cyan-700' },
+  { title: '短剧分镜工业化', desc: '12字段公式+14套风格包，双版本输出分镜卡与AI模型提示词', icon: ScrollText, color: 'from-fuchsia-600 to-purple-700' },
 ];
 
 const STATS = [
@@ -368,20 +369,21 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-2xl md:text-3xl font-bold mb-2">亮点功能</h2>
-            <p className="text-sm text-theme-muted">5 大 AI 技能，满足多样化创作需求</p>
+            <p className="text-sm text-theme-muted">6 大 AI 技能，满足多样化创作需求</p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {FEATURES.map((f) => (
               <button
                 key={f.title}
                 onClick={() => requireAuth(() => navigate('/home'))}
-                className="group relative overflow-hidden rounded-2xl border border-panel-border text-left transition-all hover:-translate-y-1 shadow-soft hover:shadow-soft-lg p-5 glass"
+                className={`group relative overflow-hidden rounded-2xl text-left transition-all hover:-translate-y-1 hover:shadow-soft-lg p-5 bg-gradient-to-br ${f.color} shadow-soft`}
               >
-                <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center mb-4">
-                  <f.icon size={20} className="text-accent" />
+                <div className="absolute -right-4 -top-4 w-20 h-20 rounded-full bg-white/10 blur-xl group-hover:bg-white/20 transition-colors" />
+                <div className="relative w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center mb-4 backdrop-blur-sm">
+                  <f.icon size={20} className="text-white" />
                 </div>
-                <h3 className="text-sm font-bold text-theme-main mb-1">{f.title}</h3>
-                <p className="text-[10px] text-theme-sub leading-relaxed">{f.desc}</p>
+                <h3 className="relative text-sm font-bold text-white mb-1">{f.title}</h3>
+                <p className="relative text-[10px] text-white/80 leading-relaxed">{f.desc}</p>
               </button>
             ))}
           </div>

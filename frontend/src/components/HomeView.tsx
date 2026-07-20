@@ -6,7 +6,7 @@ import {
   ChevronRight, FolderOpen, User, Users,
   FilePlus, Upload, Search, Package, Film, BookOpen, Wand2,
   Palette, MapPin, Music, Loader2, Video, Layers, Film as FilmIcon, LayoutGrid,
-  Zap, AlertCircle, Clapperboard as ClapperIcon, PenLine, FileText, type LucideIcon
+  Zap, AlertCircle, Clapperboard as ClapperIcon, PenLine, FileText, ScrollText, type LucideIcon
 } from 'lucide-react';
 import { useEditorStore } from '@/store/editor';
 import { api } from '@/utils/api';
@@ -44,6 +44,7 @@ const FEATURES = [
   { title: 'AI小说导演板', skill_id: 'novel-director', desc: '互动小说创作·回合制导演板模式', icon: Feather, color: 'from-rose-600 to-orange-700' },
   { title: '文旅宣传片工坊', skill_id: 'cultural-film-zh', desc: '剧本/灵感到成套影视级提示词一键生成', icon: MapPin, color: 'from-green-600 to-teal-700' },
   { title: 'Seedance诊断修复', skill_id: 'seedance-troubleshoot-zh', desc: '视频生成失败诊断+提示词修复', icon: Wrench, color: 'from-orange-600 to-red-700' },
+  { title: '短剧分镜工业化', skill_id: 'industrial-storyboard', desc: '12字段公式+14套风格包，双版本输出分镜卡与AI模型提示词', icon: ScrollText, color: 'from-cyan-600 to-blue-800' },
 ];
 
 const SCRIPT_TEMPLATES = [
@@ -187,6 +188,17 @@ const SKILL_TEMPLATES: SkillTemplate[] = [
       { name: '问题描述', type: 'text', required: true, description: '详细描述生成结果的问题' },
       { name: '生成模式', type: 'text', default: '', description: '使用的生成模式（T2V/I2V/V2V/R2V）和时长，如：I2V 10秒' },
       { name: '素材说明', type: 'text', default: '', description: '使用的素材说明（几张图/视频/音频），无则留空' },
+    ],
+  },
+  {
+    skill_id: 'industrial-storyboard',
+    title: '短剧分镜工业化提示词',
+    desc: '12字段公式+14套风格包，双版本输出分镜卡与AI模型提示词',
+    icon: ScrollText,
+    params: [
+      { name: '创作内容', type: 'text', required: true, description: '剧本片段 / 结构化镜头清单 / 单镜描述' },
+      { name: '题材风格包', type: 'select', options: ['古装权谋 (G01)', '现代复仇 (G02)', '甜宠 (G03)', '悬疑罪案 (G04)', '都市职场 (G05)', '民国谍战 (G06)', '仙侠玄幻 (G07)', '校园青春 (G08)', '家庭伦理 (G09)', '战争军旅 (G10)', '惊悚灵异 (G11)', '电竞热血 (G12)', '大漠武侠 (G13)', '宫廷古装 (G14)', '自定义'], default: '古装权谋 (G01)' },
+      { name: '输入模式', type: 'select', options: ['自动识别', '模式A：剧本自动拆分', '模式B：结构化镜头清单', '模式C：单镜直填'], default: '自动识别' },
     ],
   },
 ];
